@@ -1,0 +1,20 @@
+{
+    "short_name": "MeetTheCat",
+    "name": "Meet The Cat - Anonymous Chat",
+    "icons": [
+        {
+            "src": "https://robohash.org/mtc-app-icon.png?set=set4&size=192x192",
+            "type": "image/png",
+            "sizes": "192x192"
+        },
+        {
+            "src": "https://robohash.org/mtc-app-icon.png?set=set4&size=512x512",
+            "type": "image/png",
+            "sizes": "512x512"
+        }
+    ],
+    "start_url": ".",
+    "display": "standalone",
+    "theme_color": "#ff6b6b",
+    "background_color": "#ffffff"
+}
