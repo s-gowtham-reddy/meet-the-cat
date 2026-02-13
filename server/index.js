@@ -4,16 +4,28 @@ const { Server } = require('socket.io');
 const cors = require('cors');
 require('dotenv').config();
 
+const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
+
 const app = express();
-app.use(cors());
+// More permissive CORS for easier debugging during initial deployment
+app.use(cors({
+    origin: [FRONTEND_URL, 'https://meet-the-cat.vercel.app'],
+    credentials: true,
+    methods: ['GET', 'POST'],
+}));
 
 const server = http.createServer(app);
 const io = new Server(server, {
     cors: {
-        origin: '*',
+        origin: [FRONTEND_URL, 'https://meet-the-cat.vercel.app'],
         methods: ['GET', 'POST'],
+        credentials: true
     },
+    transports: ['websocket', 'polling']
 });
+
+console.log('Production Config:');
+console.log('- FRONTEND_URL:', FRONTEND_URL);
 
 let waitingUsers = []; // Array of { socketId, profile, joinedAt }
 let pairs = {}; // socket.id -> partner's socket.id

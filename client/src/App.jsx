@@ -3,7 +3,7 @@ import io from 'socket.io-client'
 import { DotLottieReact } from '@lottiefiles/dotlottie-react'
 import './index.css'
 
-const SOCKET_URL = 'http://localhost:3001';
+const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:3001';
 const AVATAR_SEEDS = ['Felix', 'Whiskers', 'Garfield', 'Tom', 'Luna', 'Mittens', 'Simba', 'Nala'];
 
 function App() {
@@ -17,6 +17,7 @@ function App() {
 
   // UI / Global State
   const [onlineCount, setOnlineCount] = useState(0);
+  const [isConnected, setIsConnected] = useState(false);
   const [theme, setTheme] = useState('light'); // light, dark, pink
   const [isMuted, setIsMuted] = useState(false);
 
@@ -47,7 +48,15 @@ function App() {
   useEffect(() => {
     socketRef.current = io(SOCKET_URL);
 
-    socketRef.current.on('connect', () => console.log("Connected to server"));
+    socketRef.current.on('connect', () => {
+      console.log("Connected to server");
+      setIsConnected(true);
+    });
+
+    socketRef.current.on('disconnect', () => {
+      setIsConnected(false);
+    });
+
     socketRef.current.on('user_count', (count) => setOnlineCount(count));
 
     socketRef.current.on('chat_start', (data) => {
