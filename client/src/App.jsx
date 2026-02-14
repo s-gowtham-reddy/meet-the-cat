@@ -12,8 +12,18 @@ function App() {
   const [profile, setProfile] = useState({
     name: '',
     avatarSeed: AVATAR_SEEDS[0],
-    gender: 'male'
+    gender: 'male',
+    userId: localStorage.getItem('cat_user_id') || `user_${Math.random().toString(36).substr(2, 9)}`
   });
+  const [replyingTo, setReplyingTo] = useState(null);
+  const [swipeData, setSwipeData] = useState({ id: null, offset: 0 });
+
+  // Ensure userId is saved
+  useEffect(() => {
+    if (!localStorage.getItem('cat_user_id')) {
+      localStorage.setItem('cat_user_id', profile.userId);
+    }
+  }, [profile.userId]);
 
   // UI / Global State
   const [onlineCount, setOnlineCount] = useState(0);
@@ -53,6 +63,9 @@ function App() {
 
   const profileRef = useRef(profile);
   useEffect(() => { profileRef.current = profile; }, [profile]);
+
+  const roomIdRef = useRef(roomId);
+  useEffect(() => { roomIdRef.current = roomId; }, [roomId]);
 
   useEffect(() => {
     socketRef.current = io(SOCKET_URL);
@@ -127,7 +140,7 @@ function App() {
     socketRef.current.on('partner_joined', (data) => {
       setStatus('connected');
       setPartner(data.partner);
-      setChat([]);
+      // Don't clear chat here if it's a join message for an existing room
     });
 
     socketRef.current.on('request_partner_info', () => {
@@ -135,6 +148,12 @@ function App() {
         roomId: roomIdRef.current,
         profile: profileRef.current
       });
+    });
+
+    socketRef.current.on('room_error', (data) => {
+      alert(data.message);
+      setStep(0);
+      setShowRoomModal(true);
     });
 
     socketRef.current.on('lobby_count', (count) => {
@@ -161,13 +180,43 @@ function App() {
     return () => socketRef.current.disconnect();
   }, []); // Only run once on mount!
 
-  const roomIdRef = useRef(roomId);
-  useEffect(() => { roomIdRef.current = roomId; }, [roomId]);
 
   useEffect(() => {
     // Handling mute status separately if needed, but better to check isMuted in listeners directly
     // or use a ref for isMuted too.
   }, [isMuted]);
+
+  const handleJoinQueue = () => {
+    if (step === 0) setStep(1);
+    setStatus('waiting');
+    setChat([]);
+    setPartner(null);
+    setRoomId(null);
+    socketRef.current.emit('register_cat', { userId: profile.userId, profile });
+    socketRef.current.emit('join_queue', profile);
+  };
+
+  const handleCreateRoom = (e) => {
+    if (e) e.preventDefault();
+    if (roomName.trim() && profile.name.trim()) {
+      socketRef.current.emit('register_cat', { userId: profile.userId, profile });
+      socketRef.current.emit('create_room', { roomName, profile });
+      setStep(1);
+      setStatus('waiting');
+      setShowRoomModal(false);
+    }
+  };
+
+  const handleJoinRoom = (e) => {
+    if (e) e.preventDefault();
+    if (inputRoomId.trim() && profile.name.trim()) {
+      socketRef.current.emit('register_cat', { userId: profile.userId, profile });
+      socketRef.current.emit('join_private_room', { roomId: inputRoomId.trim(), profile });
+      setStep(1);
+      setStatus('waiting');
+      setShowRoomModal(false);
+    }
+  };
 
   const handleStartChat = () => {
     if (profile.name.trim() && profile.gender) {
@@ -177,25 +226,9 @@ function App() {
         setStatus('waiting');
       } else {
         socketRef.current.emit('join_queue', profile);
-        setStep(1);
-        setStatus('waiting');
+        // Otherwise, join the public queue
+        handleJoinQueue();
       }
-    }
-  };
-
-  const handleJoinRoom = (e) => {
-    e.preventDefault();
-    if (inputRoomId.trim() && profile.name.trim()) {
-      socketRef.current.emit('join_private_room', { roomId: inputRoomId, profile });
-      setShowRoomModal(false);
-    }
-  };
-
-  const handleCreateRoom = (e) => {
-    e.preventDefault();
-    if (roomName.trim() && profile.name.trim()) {
-      socketRef.current.emit('create_room', { roomName, profile });
-      setShowRoomModal(false);
     }
   };
 
@@ -225,26 +258,66 @@ function App() {
     }, 1000);
   };
 
+  const handleSwipeStart = (e, msgId) => {
+    const touch = e.touches ? e.touches[0] : e;
+    setSwipeData({ id: msgId, startX: touch.clientX, offset: 0 });
+  };
+
+  const handleSwipeMove = (e) => {
+    if (!swipeData.id) return;
+    const touch = e.touches ? e.touches[0] : e;
+    const diff = touch.clientX - swipeData.startX;
+    if (diff > 0 && diff < 100) {
+      setSwipeData(prev => ({ ...prev, offset: diff }));
+    }
+  };
+
+  const handleSwipeEnd = (msg) => {
+    if (swipeData.offset > 60) {
+      setReplyingTo({
+        text: msg.message,
+        name: msg.isMe ? 'You' : (msg.sender?.name || partner?.name || 'Stranger'),
+        userId: msg.userId
+      });
+      if (window.navigator.vibrate) window.navigator.vibrate(10);
+    }
+    setSwipeData({ id: null, offset: 0 });
+  };
+
   const sendMessage = (e) => {
     e.preventDefault();
     if (message.trim() && status === 'connected') {
       const timestamp = new Date().toISOString();
-      const msgData = { message, isMe: true, timestamp };
+      const msgData = {
+        message,
+        isMe: true,
+        timestamp,
+        userId: profile.userId,
+        replyTo: replyingTo // Include reply metadata
+      };
 
-      socketRef.current.emit('send_message', { message, roomId, profile });
+      socketRef.current.emit('send_message', {
+        message,
+        roomId,
+        profile,
+        replyTo: replyingTo
+      });
       socketRef.current.emit('stop_typing', { roomId });
       setChat((prev) => [...prev, msgData]);
       setMessage('');
+      setReplyingTo(null); // Clear reply after sending
+    }
+  };
+
+  const handleLeaveRoom = () => {
+    if (window.confirm('Are you sure you want to leave this Cat Pack? 🐾🚪')) {
+      handleHome();
     }
   };
 
   const handleSkip = () => {
     socketRef.current.emit('skip_chat');
-    setStatus('waiting');
-    setChat([]);
-    setPartner(null);
-    setIsPartnerTyping(false);
-    socketRef.current.emit('join_queue', profile);
+    handleJoinQueue(); // Rejoin queue after skipping
   };
 
   const handleHome = () => {
@@ -553,7 +626,13 @@ function App() {
                     ) : (
                       <div className="partner-info">
                         <img src={getCatUrl(partner?.avatarSeed)} className="partner-mini-avatar" alt="" />
-                        <p>Chatting with <strong>{partner?.name}</strong> {roomId && <span className="room-tag">({roomName || 'Private Room'})</span>}</p>
+                        <p>
+                          {roomId ? (
+                            <>Private Room - <strong>{roomName || 'Cat Pack'}</strong></>
+                          ) : (
+                            <>Chatting with <strong>{partner?.name || 'Stranger'}</strong></>
+                          )}
+                        </p>
                       </div>
                     )}
                   </div>
@@ -568,7 +647,21 @@ function App() {
                             <p>{msg.message}</p>
                           </div>
                         ) : (
-                          <div key={index} className={`message-row ${msg.isMe ? 'my-row' : 'stranger-row'}`}>
+                          <div
+                            key={index}
+                            className={`message-row ${msg.isMe ? 'my-row' : 'stranger-row'} ${swipeData.id === index ? 'swiping-active' : ''}`}
+                            style={{
+                              transform: swipeData.id === index ? `translateX(${swipeData.offset}px)` : 'none'
+                            }}
+                            onTouchStart={(e) => handleSwipeStart(e, index)}
+                            onTouchMove={handleSwipeMove}
+                            onTouchEnd={() => handleSwipeEnd(msg)}
+                            onMouseDown={(e) => handleSwipeStart(e, index)}
+                            onMouseMove={handleSwipeMove}
+                            onMouseUp={() => handleSwipeEnd(msg)}
+                            onMouseLeave={() => setSwipeData({ id: null, offset: 0 })}
+                          >
+                            <div className="swipe-indicator">🐾↩️</div>
                             <div className="avatar">
                               <img src={getCatUrl(msg.isMe ? profile.avatarSeed : (msg.sender?.avatarSeed || partner?.avatarSeed))} alt="p" />
                             </div>
@@ -576,6 +669,14 @@ function App() {
                               {!msg.isMe && (roomId || msg.sender) && (
                                 <div className="sender-name">{msg.sender?.name || partner?.name || 'Stranger'}</div>
                               )}
+
+                              {msg.replyTo && (
+                                <div className="quoted-message">
+                                  <span className="quoted-name">{msg.replyTo.name}</span>
+                                  <div className="quoted-text">{msg.replyTo.text}</div>
+                                </div>
+                              )}
+
                               <div className="message-text">{msg.message}</div>
                               <div className="message-time">{formatTime(msg.timestamp)}</div>
                             </div>
@@ -592,6 +693,15 @@ function App() {
                     </div>
 
                     <div className="chat-controls-area">
+                      {replyingTo && (
+                        <div className="reply-preview-container">
+                          <div className="reply-preview-content">
+                            <span className="reply-preview-name">Replying to {replyingTo.name}</span>
+                            <div className="reply-preview-text">{replyingTo.text}</div>
+                          </div>
+                          <button className="cancel-reply-btn" onClick={() => setReplyingTo(null)}>✕</button>
+                        </div>
+                      )}
                       {status === 'connected' && !roomId && (
                         <div className="next-cat-container">
                           <button className="next-cat-btn-glass" onClick={handleSkip}>
@@ -613,6 +723,11 @@ function App() {
                           <img src="https://robohash.org/premium-meow.png?set=set4&size=100x100" alt="Meow" />
                         </button>
                         <button type="submit" className="send-btn"><span className="send-icon">🐾</span></button>
+                        {roomId && (
+                          <button type="button" className="exit-room-btn" onClick={handleLeaveRoom} title="Leave Room">
+                            <span className="exit-icon">🚪🏃</span>
+                          </button>
+                        )}
                       </form>
                       {showMeowAnim && (
                         <div className="meow-storm-overlay">
