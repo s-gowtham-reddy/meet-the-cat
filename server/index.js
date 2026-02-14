@@ -29,10 +29,42 @@ console.log('- FRONTEND_URL:', FRONTEND_URL);
 
 let waitingUsers = []; // Array of { socketId, profile, joinedAt }
 let pairs = {}; // socket.id -> partner's socket.id
+let privateRooms = {}; // roomId -> { roomName, creatorName }
+
+function generateRoomCode() {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789#@';
+    let code = '';
+    for (let i = 0; i < 7; i++) {
+        code += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return code;
+}
+
 const broadcastUserCount = () => {
-    // Using io.sockets.size is often more consistent for connected sockets
-    const count = io.of("/").sockets.size;
-    io.emit('user_count', count);
+    const allSockets = Array.from(io.of("/").sockets.values());
+    const totalCount = allSockets.length;
+
+    // Calculate how many users are in ANY private room
+    let roomUsersCount = 0;
+    const roomCounts = {};
+
+    Object.keys(privateRooms).forEach(roomId => {
+        const room = io.sockets.adapter.rooms.get(roomId);
+        const count = room ? room.size : 0;
+        roomCounts[roomId] = count;
+        roomUsersCount += count;
+        // Emit specific count to each room
+        io.to(roomId).emit('room_count', count);
+    });
+
+    const lobbyCount = Math.max(0, totalCount - roomUsersCount);
+
+    // Broadcast lobby count to everyone (lobby users will use this)
+    io.emit('lobby_count', lobbyCount);
+
+    // Also emit old-style user_count for backward compatibility if needed, 
+    // but we'll transition the client to lobby_count.
+    io.emit('user_count', totalCount);
 };
 
 io.on('connection', (socket) => {
@@ -41,6 +73,10 @@ io.on('connection', (socket) => {
 
     socket.on('join_queue', (profile) => {
         if (!profile || !profile.name || !profile.gender) return;
+
+        // Ensure user is not in a private room
+        socket.leaveAll();
+        socket.join(socket.id); // rejoin personal room
 
         // Check if already in queue
         const existingIndex = waitingUsers.findIndex(u => u.socketId === socket.id);
@@ -58,35 +94,124 @@ io.on('connection', (socket) => {
         tryMatch(socket.id);
     });
 
+    socket.on('create_room', (data) => {
+        const { roomName, profile } = data;
+        const roomId = generateRoomCode();
+        privateRooms[roomId] = {
+            roomName: roomName || 'Private Room',
+            creatorName: profile?.name || 'Stranger'
+        };
+        socket.join(roomId);
+        socket.emit('room_created', { roomId, roomName: privateRooms[roomId].roomName });
+        console.log(`Room created: ${roomId} by ${profile?.name}`);
+        broadcastUserCount();
+    });
+
+    socket.on('get_room_info', (data) => {
+        const { roomId } = data;
+        const roomInfo = privateRooms[roomId];
+        if (roomInfo) {
+            socket.emit('room_info_preview', { roomId, ...roomInfo });
+        }
+    });
+
+    socket.on('join_private_room', (data) => {
+        const { roomId, profile } = data;
+        socket.join(roomId);
+        console.log(`User ${profile.name} joined room: ${roomId}`);
+
+        const roomInfo = privateRooms[roomId] || { roomName: 'Private Room', creatorName: 'Stranger' };
+
+        // Let the joiner know they've successfully joined
+        socket.emit('room_joined', { roomId, ...roomInfo });
+
+        // Notify others in the room
+        socket.to(roomId).emit('partner_joined', {
+            partner: { name: profile.name, avatarSeed: profile.avatarSeed },
+            isGroup: true
+        });
+
+        // For group chat, we can just say "User X joined"
+        socket.to(roomId).emit('receive_message', {
+            message: `${profile.name} joined the room! 🐾`,
+            isSystem: true,
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        });
+
+        broadcastUserCount();
+    });
+
+    socket.on('send_partner_info', (data) => {
+        const { roomId, profile } = data;
+        socket.to(roomId).emit('partner_joined', {
+            partner: { name: profile.name, avatarSeed: profile.avatarSeed }
+        });
+    });
+
     socket.on('send_message', (data) => {
-        const partnerId = pairs[socket.id];
-        if (partnerId) {
-            io.to(partnerId).emit('receive_message', {
-                message: data.message,
+        const { message, roomId, profile } = data;
+        if (roomId) {
+            // Private room message - broadcast to EVERYONE else in the room
+            socket.to(roomId).emit('receive_message', {
+                message: message,
+                sender: profile ? { name: profile.name, avatarSeed: profile.avatarSeed } : null,
                 timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
             });
+        } else {
+            // Matched chat message
+            const partnerId = pairs[socket.id];
+            if (partnerId) {
+                io.to(partnerId).emit('receive_message', {
+                    message: message,
+                    timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                });
+            }
         }
     });
 
-    socket.on('meow', () => {
-        const partnerId = pairs[socket.id];
-        if (partnerId) {
-            io.to(partnerId).emit('partner_meow');
+    socket.on('meow', (data) => {
+        const roomId = data?.roomId;
+        if (roomId) {
+            socket.to(roomId).emit('partner_meow');
+        } else {
+            const partnerId = pairs[socket.id];
+            if (partnerId) {
+                io.to(partnerId).emit('partner_meow');
+            }
         }
     });
 
-    socket.on('typing', () => {
-        const partnerId = pairs[socket.id];
-        if (partnerId) io.to(partnerId).emit('partner_typing');
+    socket.on('typing', (data) => {
+        const roomId = data?.roomId;
+        if (roomId) {
+            socket.to(roomId).emit('partner_typing');
+        } else {
+            const partnerId = pairs[socket.id];
+            if (partnerId) io.to(partnerId).emit('partner_typing');
+        }
     });
 
-    socket.on('stop_typing', () => {
-        const partnerId = pairs[socket.id];
-        if (partnerId) io.to(partnerId).emit('partner_stop_typing');
+    socket.on('stop_typing', (data) => {
+        const roomId = data?.roomId;
+        if (roomId) {
+            socket.to(roomId).emit('partner_stop_typing');
+        } else {
+            const partnerId = pairs[socket.id];
+            if (partnerId) io.to(partnerId).emit('partner_stop_typing');
+        }
     });
 
     socket.on('skip_chat', () => {
         unpairUser(socket.id);
+    });
+
+    socket.on('disconnecting', () => {
+        // Handle private room disconnection
+        for (const room of socket.rooms) {
+            if (room !== socket.id) {
+                socket.to(room).emit('partner_disconnected');
+            }
+        }
     });
 
     socket.on('disconnect', () => {

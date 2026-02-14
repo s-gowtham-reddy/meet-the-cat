@@ -17,6 +17,8 @@ function App() {
 
   // UI / Global State
   const [onlineCount, setOnlineCount] = useState(0);
+  const [lobbyCount, setLobbyCount] = useState(0);
+  const [roomUserCount, setRoomUserCount] = useState(0);
   const [isConnected, setIsConnected] = useState(false);
   const [theme, setTheme] = useState('light'); // light, dark, pink
   const [isMuted, setIsMuted] = useState(false);
@@ -28,6 +30,13 @@ function App() {
   const [partner, setPartner] = useState(null); // { name, avatarSeed }
   const [isPartnerTyping, setIsPartnerTyping] = useState(false);
   const [showMeowAnim, setShowMeowAnim] = useState(false);
+  const [roomId, setRoomId] = useState(null);
+  const [roomName, setRoomName] = useState('');
+  const [roomCreator, setRoomCreator] = useState('');
+  const [showRoomModal, setShowRoomModal] = useState(false);
+  const [modalTab, setModalTab] = useState('create'); // 'create' or 'join'
+  const [inputRoomId, setInputRoomId] = useState('');
+  const [roomLink, setRoomLink] = useState('');
 
   const socketRef = useRef(null);
   const typingTimeoutRef = useRef(null);
@@ -69,7 +78,13 @@ function App() {
 
     socketRef.current.on('receive_message', (data) => {
       setIsPartnerTyping(false);
+      // For group chat, we might have system messages or messages with a sender
       setChat((prev) => [...prev, { ...data, isMe: false }]);
+      // If it's a new person chatting, we might want to set them as a "primary" partner for 1-on-1 feel
+      // but for group chat we just show them in the box.
+      if (data.sender && !partner) {
+        setPartner(data.sender);
+      }
     });
 
     socketRef.current.on('partner_meow', () => {
@@ -85,11 +100,69 @@ function App() {
       setChat([]);
       setPartner(null);
       setIsPartnerTyping(false);
-      socketRef.current.emit('join_queue', profileRef.current);
+      if (!roomId) {
+        socketRef.current.emit('join_queue', profileRef.current);
+      }
     });
+
+    socketRef.current.on('room_created', (data) => {
+      const url = new URL(window.location.href);
+      url.searchParams.set('room', data.roomId);
+      setRoomLink(url.toString());
+      setRoomId(data.roomId);
+      setRoomName(data.roomName);
+      setRoomCreator(profileRef.current.name);
+      setStatus('waiting');
+      setStep(1);
+    });
+
+    socketRef.current.on('room_joined', (data) => {
+      setRoomId(data.roomId);
+      setRoomName(data.roomName);
+      setRoomCreator(data.creatorName);
+      setStatus('connected'); // Transition to connected immediately upon join
+      setStep(1);
+    });
+
+    socketRef.current.on('partner_joined', (data) => {
+      setStatus('connected');
+      setPartner(data.partner);
+      setChat([]);
+    });
+
+    socketRef.current.on('request_partner_info', () => {
+      socketRef.current.emit('send_partner_info', {
+        roomId: roomIdRef.current,
+        profile: profileRef.current
+      });
+    });
+
+    socketRef.current.on('lobby_count', (count) => {
+      setLobbyCount(count);
+    });
+
+    socketRef.current.on('room_count', (count) => {
+      setRoomUserCount(count);
+    });
+
+    socketRef.current.on('room_info_preview', (data) => {
+      setRoomName(data.roomName);
+      setRoomCreator(data.creatorName);
+    });
+
+    // Check for room in URL on mount
+    const urlParams = new URLSearchParams(window.location.search);
+    const roomFromUrl = urlParams.get('room');
+    if (roomFromUrl) {
+      setRoomId(roomFromUrl);
+      socketRef.current.emit('get_room_info', { roomId: roomFromUrl });
+    }
 
     return () => socketRef.current.disconnect();
   }, []); // Only run once on mount!
+
+  const roomIdRef = useRef(roomId);
+  useEffect(() => { roomIdRef.current = roomId; }, [roomId]);
 
   useEffect(() => {
     // Handling mute status separately if needed, but better to check isMuted in listeners directly
@@ -98,9 +171,38 @@ function App() {
 
   const handleStartChat = () => {
     if (profile.name.trim() && profile.gender) {
-      socketRef.current.emit('join_queue', profile);
-      setStep(1);
-      setStatus('waiting');
+      if (roomId) {
+        socketRef.current.emit('join_private_room', { roomId, profile });
+        setStep(1);
+        setStatus('waiting');
+      } else {
+        socketRef.current.emit('join_queue', profile);
+        setStep(1);
+        setStatus('waiting');
+      }
+    }
+  };
+
+  const handleJoinRoom = (e) => {
+    e.preventDefault();
+    if (inputRoomId.trim() && profile.name.trim()) {
+      socketRef.current.emit('join_private_room', { roomId: inputRoomId, profile });
+      setShowRoomModal(false);
+    }
+  };
+
+  const handleCreateRoom = (e) => {
+    e.preventDefault();
+    if (roomName.trim() && profile.name.trim()) {
+      socketRef.current.emit('create_room', { roomName, profile });
+      setShowRoomModal(false);
+    }
+  };
+
+  const copyRoomCode = () => {
+    if (roomId) {
+      navigator.clipboard.writeText(roomId);
+      // Optional: add a temporary tooltip or notification
     }
   };
 
@@ -110,16 +212,16 @@ function App() {
   };
 
   const handleMeow = () => {
-    socketRef.current.emit('meow');
+    socketRef.current.emit('meow', { roomId });
     triggerMeowStorm();
     if (!isMuted) meowAudioRef.current.play().catch(() => { });
   };
 
   const handleTyping = () => {
-    socketRef.current.emit('typing');
+    socketRef.current.emit('typing', { roomId });
     if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
     typingTimeoutRef.current = setTimeout(() => {
-      socketRef.current.emit('stop_typing');
+      socketRef.current.emit('stop_typing', { roomId });
     }, 1000);
   };
 
@@ -129,8 +231,8 @@ function App() {
       const timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
       const msgData = { message, isMe: true, timestamp };
 
-      socketRef.current.emit('send_message', { message });
-      socketRef.current.emit('stop_typing');
+      socketRef.current.emit('send_message', { message, roomId, profile });
+      socketRef.current.emit('stop_typing', { roomId });
       setChat((prev) => [...prev, msgData]);
       setMessage('');
     }
@@ -154,6 +256,10 @@ function App() {
     setChat([]);
     setPartner(null);
     setIsPartnerTyping(false);
+    setRoomId(null);
+    setRoomLink('');
+    // Clear URL params
+    window.history.pushState({}, '', window.location.pathname);
   };
 
   const getCatUrl = (seed) => `https://robohash.org/${seed}.png?set=set4&size=400x400`;
@@ -172,11 +278,17 @@ function App() {
             <h1>Meet The Cat</h1>
           </div>
           <div className="header-status">
+            {roomId && (
+              <div className="status-item room-code-pill" onClick={copyRoomCode} title="Click to copy Room Code">
+                <span className="count-label">Room Code:</span>
+                <span className="count-value code-accent">{roomId}</span>
+              </div>
+            )}
             <div className="status-item online-cats-pill">
               <img src="https://robohash.org/white-brown-cat.png?set=set4&size=200x200" className="online-cat-icon" alt="" />
               <div className="online-cats-text">
-                <span className="count-label">Online Cats:</span>
-                <span className="count-value">{onlineCount}</span>
+                <span className="count-label">{roomId ? 'Cats in Room:' : 'Online Cats:'}</span>
+                <span className="count-value">{roomId ? roomUserCount : lobbyCount}</span>
               </div>
             </div>
             <div className="header-actions">
@@ -251,18 +363,107 @@ function App() {
                   </div>
 
                   <div className="identity-footer">
-                    <button
-                      className="primary-btn pulse-btn"
-                      onClick={handleStartChat}
-                      disabled={!profile.name.trim() || !profile.gender}
-                    >
-                      Start Meeting Cats 🐾
-                    </button>
+                    <div className="main-actions">
+                      <button
+                        className="primary-btn pulse-btn"
+                        onClick={handleStartChat}
+                        disabled={!profile.name.trim() || !profile.gender}
+                      >
+                        {roomId ? 'Join Private Room 🐾' : 'Start Meeting Cats 🐾'}
+                      </button>
+                      <button
+                        className="secondary-btn create-room-btn pulse-btn"
+                        onClick={() => {
+                          setShowRoomModal(true);
+                        }}
+                        disabled={!!roomId}
+                        title="Create or Join Private Chat Room"
+                      >
+                        <img src="https://robohash.org/premium-room-cat.png?set=set4&size=150x150" className="room-btn-img" alt="Cat Room" />
+                      </button>
+                    </div>
                     <div className="scroll-hint">
                       <p>Scroll down to learn more</p>
                       <div className="arrow-down">↓</div>
                     </div>
                   </div>
+
+                  {showRoomModal && (
+                    <div className="modal-overlay">
+                      <div className="modal-content glass-card room-modal">
+                        <div className="modal-tabs">
+                          <button
+                            className={`tab-btn ${modalTab === 'create' ? 'active' : ''}`}
+                            onClick={() => setModalTab('create')}
+                          >
+                            Create Room
+                          </button>
+                          <button
+                            className={`tab-btn ${modalTab === 'join' ? 'active' : ''}`}
+                            onClick={() => setModalTab('join')}
+                          >
+                            Join Room
+                          </button>
+                        </div>
+
+                        {modalTab === 'create' ? (
+                          <div className="tab-pane">
+                            <form onSubmit={handleCreateRoom}>
+                              <div className="modal-input-group">
+                                <input
+                                  type="text"
+                                  placeholder="Your Name"
+                                  value={profile.name}
+                                  onChange={(e) => setProfile({ ...profile, name: e.target.value })}
+                                  required
+                                />
+                              </div>
+                              <div className="modal-input-group">
+                                <input
+                                  type="text"
+                                  placeholder="Room Name ..."
+                                  value={roomName}
+                                  onChange={(e) => setRoomName(e.target.value)}
+                                  required
+                                />
+                              </div>
+                              <div className="modal-buttons">
+                                <button type="button" className="cancel-btn" onClick={() => setShowRoomModal(false)}>Cancel</button>
+                                <button type="submit" className="confirm-btn">Create 🐾</button>
+                              </div>
+                            </form>
+                          </div>
+                        ) : (
+                          <div className="tab-pane">
+                            <form onSubmit={handleJoinRoom}>
+                              <div className="modal-input-group">
+                                <input
+                                  type="text"
+                                  placeholder="Your Name"
+                                  value={profile.name}
+                                  onChange={(e) => setProfile({ ...profile, name: e.target.value })}
+                                  required
+                                />
+                              </div>
+                              <div className="modal-input-group">
+                                <input
+                                  type="text"
+                                  placeholder="Secret Room Code..."
+                                  value={inputRoomId}
+                                  onChange={(e) => setInputRoomId(e.target.value)}
+                                  required
+                                />
+                              </div>
+                              <div className="modal-buttons">
+                                <button type="button" className="cancel-btn" onClick={() => setShowRoomModal(false)}>Cancel</button>
+                                <button type="submit" className="confirm-btn">Join 🐾</button>
+                              </div>
+                            </form>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
               </section>
 
@@ -328,11 +529,19 @@ function App() {
                 <div className="chat-sub-header">
                   <div className="chat-info">
                     {status === 'waiting' ? (
-                      <p className="waiting-text">Searching for a match for {profile.name}...</p>
+                      <div className="waiting-info">
+                        <p className="waiting-text">{roomId ? `Waiting for friends in ${roomName || 'Private Room'}...` : `Searching for a match for ${profile.name}...`}</p>
+                        {roomId && (
+                          <div className="room-code-display" onClick={copyRoomCode} title="Click to copy Room Code">
+                            <span className="code-label">CODE:</span>
+                            <span className="code-value">{roomId}</span>
+                          </div>
+                        )}
+                      </div>
                     ) : (
                       <div className="partner-info">
                         <img src={getCatUrl(partner?.avatarSeed)} className="partner-mini-avatar" alt="" />
-                        <p>Chatting with <strong>{partner?.name}</strong></p>
+                        <p>Chatting with <strong>{partner?.name}</strong> {roomId && <span className="room-tag">({roomName || 'Private Room'})</span>}</p>
                       </div>
                     )}
                   </div>
@@ -342,27 +551,36 @@ function App() {
                   <>
                     <div className="messages-box">
                       {chat.map((msg, index) => (
-                        <div key={index} className={`message-row ${msg.isMe ? 'my-row' : 'stranger-row'}`}>
-                          <div className="avatar">
-                            <img src={getCatUrl(msg.isMe ? profile.avatarSeed : partner.avatarSeed)} alt="p" />
+                        msg.isSystem ? (
+                          <div key={index} className="system-message">
+                            <p>{msg.message}</p>
                           </div>
-                          <div className={`message-bubble ${msg.isMe ? 'my-message' : 'stranger-message'}`}>
-                            <div className="message-text">{msg.message}</div>
-                            <div className="message-time">{msg.timestamp}</div>
+                        ) : (
+                          <div key={index} className={`message-row ${msg.isMe ? 'my-row' : 'stranger-row'}`}>
+                            <div className="avatar">
+                              <img src={getCatUrl(msg.isMe ? profile.avatarSeed : (msg.sender?.avatarSeed || partner?.avatarSeed))} alt="p" />
+                            </div>
+                            <div className={`message-bubble ${msg.isMe ? 'my-message' : 'stranger-message'}`}>
+                              {!msg.isMe && (roomId || msg.sender) && (
+                                <div className="sender-name">{msg.sender?.name || partner?.name || 'Stranger'}</div>
+                              )}
+                              <div className="message-text">{msg.message}</div>
+                              <div className="message-time">{msg.timestamp}</div>
+                            </div>
                           </div>
-                        </div>
+                        )
                       ))}
                       {isPartnerTyping && (
                         <div className="typing-indicator">
                           <span className="typing-paw">🐾</span>
-                          <span>{partner?.name || 'Stranger'} is typing...</span>
+                          <span>{partner?.name || 'Someone'} is typing...</span>
                         </div>
                       )}
                       <div ref={messagesEndRef} />
                     </div>
 
                     <div className="chat-controls-area">
-                      {status === 'connected' && (
+                      {status === 'connected' && !roomId && (
                         <div className="next-cat-container">
                           <button className="next-cat-btn-glass" onClick={handleSkip}>
                             Next Cat 🐾
@@ -407,7 +625,13 @@ function App() {
                         loop autoplay
                       />
                     </div>
-                    <p className="animated-waiting">Finding your pair...</p>
+                    <p className="animated-waiting">
+                      {roomId ? (
+                        roomCreator === profile.name
+                          ? `Waiting for friends in ${roomName || 'your room'}...`
+                          : `Letting in to ${roomCreator || 'the'}'s room`
+                      ) : 'Finding your pair...'}
+                    </p>
                   </div>
                 )}
               </div>
