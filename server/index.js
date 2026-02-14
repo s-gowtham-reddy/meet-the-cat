@@ -135,7 +135,7 @@ io.on('connection', (socket) => {
         socket.to(roomId).emit('receive_message', {
             message: `${profile.name} joined the room! 🐾`,
             isSystem: true,
-            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+            timestamp: new Date().toISOString()
         });
 
         broadcastUserCount();
@@ -155,7 +155,7 @@ io.on('connection', (socket) => {
             socket.to(roomId).emit('receive_message', {
                 message: message,
                 sender: profile ? { name: profile.name, avatarSeed: profile.avatarSeed } : null,
-                timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                timestamp: new Date().toISOString()
             });
         } else {
             // Matched chat message
@@ -163,7 +163,7 @@ io.on('connection', (socket) => {
             if (partnerId) {
                 io.to(partnerId).emit('receive_message', {
                     message: message,
-                    timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                    timestamp: new Date().toISOString()
                 });
             }
         }

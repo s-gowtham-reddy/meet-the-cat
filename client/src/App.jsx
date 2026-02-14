@@ -228,7 +228,7 @@ function App() {
   const sendMessage = (e) => {
     e.preventDefault();
     if (message.trim() && status === 'connected') {
-      const timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      const timestamp = new Date().toISOString();
       const msgData = { message, isMe: true, timestamp };
 
       socketRef.current.emit('send_message', { message, roomId, profile });
@@ -263,6 +263,18 @@ function App() {
   };
 
   const getCatUrl = (seed) => `https://robohash.org/${seed}.png?set=set4&size=400x400`;
+
+  const formatTime = (timestamp) => {
+    if (!timestamp) return '';
+    try {
+      const date = new Date(timestamp);
+      // Fallback for cases where timestamp might already be formatted (legacy or edge cases)
+      if (isNaN(date.getTime())) return timestamp;
+      return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    } catch (e) {
+      return timestamp;
+    }
+  };
 
   const toggleTheme = () => {
     const themes = ['light', 'dark', 'pink'];
@@ -565,7 +577,7 @@ function App() {
                                 <div className="sender-name">{msg.sender?.name || partner?.name || 'Stranger'}</div>
                               )}
                               <div className="message-text">{msg.message}</div>
-                              <div className="message-time">{msg.timestamp}</div>
+                              <div className="message-time">{formatTime(msg.timestamp)}</div>
                             </div>
                           </div>
                         )
