@@ -1,6 +1,6 @@
 # 🐾 Meet The Cat
 
-**Meet The Cat** is a premium, real-time anonymous chat application designed specifically for cat lovers (and people who think like them!). 🐈✨
+**Meet The Cat** is a premium, real-time anonymous chat application designed specifically for peolpe in the name of cats. 🐈✨
 
 ![App Preview](https://robohash.org/premium-cat-preview.png?set=set4&size=200x200)
 
