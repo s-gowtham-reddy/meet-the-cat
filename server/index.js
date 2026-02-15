@@ -56,11 +56,17 @@ const io = new Server(server, {
     transports: ['websocket', 'polling']
 });
 
-// MongoDB Connection
+// MongoDB Connection (optional: app works without DB for chat; analytics are skipped if disconnected)
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/meetthecat';
 mongoose.connect(MONGODB_URI)
     .then(() => console.log('Connected to MongoDB 🐾'))
-    .catch(err => console.error('MongoDB connection error:', err));
+    .catch(err => {
+        console.error('MongoDB connection error (analytics disabled):', err.message);
+    });
+
+function isDbConnected() {
+    return mongoose.connection.readyState === 1;
+}
 
 console.log('Production Config:');
 console.log('- FRONTEND_URL:', FRONTEND_URL);
@@ -198,9 +204,9 @@ io.on('connection', (socket) => {
     console.log(`User Connected: ${socket.id}. Total: ${io.engine.clientsCount}`);
 
     socket.on('register_cat', async (data) => {
-        const { userId, profile } = data;
+        const { userId } = data;
         if (!userId) return;
-
+        if (!isDbConnected()) return;
         try {
             const exists = await UniqueVisitor.findOne({ userId });
             if (!exists) {
@@ -339,33 +345,41 @@ io.on('connection', (socket) => {
     });
 
     socket.on('send_message', async (data) => {
-        const { message, roomId, profile } = data;
+        const { message, roomId, profile, messageId } = data;
         if (!checkSocketRateLimit(socket.id, 'send_message')) return;
         const sanitized = sanitizeMessage(message);
         if (!sanitized) return;
         if (roomId) {
-            // Private room message - broadcast to EVERYONE else in the room
             const msgData = {
                 message: sanitized,
                 sender: profile ? { name: profile.name, avatarSeed: profile.avatarSeed } : null,
                 userId: profile?.userId,
                 timestamp: new Date().toISOString(),
-                replyTo: data.replyTo // Add reply metadata
+                replyTo: data.replyTo,
+                messageId: messageId || null,
+                senderSocketId: socket.id
             };
-
             socket.to(roomId).emit('receive_message', msgData);
         } else {
-            // Matched chat message
             const partnerId = pairs[socket.id];
             if (partnerId) {
                 const msgData = {
                     message: sanitized,
                     userId: profile?.userId,
                     timestamp: new Date().toISOString(),
-                    replyTo: data.replyTo // Add reply metadata
+                    replyTo: data.replyTo,
+                    messageId: messageId || null,
+                    senderSocketId: socket.id
                 };
                 io.to(partnerId).emit('receive_message', msgData);
             }
+        }
+    });
+
+    socket.on('message_delivered', (data) => {
+        const { messageId, senderSocketId } = data;
+        if (messageId && senderSocketId) {
+            io.to(senderSocketId).emit('message_delivered', { messageId });
         }
     });
 
@@ -446,19 +460,18 @@ function unpairUser(socketId) {
     const partnerId = pairs[socketId];
     if (partnerId) {
         const myName = activeSessions[socketId]?.username || 'A Cat';
-        // Save session logs
-        saveSession(socketId);
-        saveSession(partnerId);
-
+        // Emit to partner first so they see "disconnected" immediately (before any async work)
         io.to(partnerId).emit('receive_message', {
             message: `${myName} has exited. 🐾👋`,
             isSystem: true,
             timestamp: new Date().toISOString()
         });
-
         io.to(partnerId).emit('partner_disconnected');
         delete pairs[partnerId];
         delete pairs[socketId];
+        // Save session logs after partner is notified
+        saveSession(socketId);
+        saveSession(partnerId);
     } else {
         // If it was a private room, just save the individual session
         saveSession(socketId);
@@ -468,6 +481,10 @@ function unpairUser(socketId) {
 async function saveSession(socketId) {
     const session = activeSessions[socketId];
     if (session) {
+        if (!isDbConnected()) {
+            delete activeSessions[socketId];
+            return;
+        }
         const duration = Math.floor((Date.now() - session.startTime) / 1000);
         try {
             await SessionLog.create({
@@ -535,3 +552,11 @@ function tryMatch(socketId) {
 
 const PORT = process.env.PORT || 3001;
 server.listen(PORT, () => console.log(`SERVER RUNNING ON PORT ${PORT}`));
+server.on('error', (err) => {
+    if (err.code === 'EADDRINUSE') {
+        console.error(`Port ${PORT} is already in use. Stop the other process or set PORT in .env`);
+    } else {
+        console.error('Server error:', err);
+    }
+    process.exit(1);
+});

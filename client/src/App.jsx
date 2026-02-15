@@ -6,6 +6,7 @@ import './index.css'
 const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:3001';
 const AVATAR_SEEDS = ['Felix', 'Whiskers', 'Garfield', 'Tom', 'Luna', 'Mittens', 'Simba', 'Nala'];
 const MEOW_EMOJIS = ['MEOW! 🐾', '🐾', '🐱', '🐱‍👤', '✨'];
+const EMOJI_PICKER_LIST = ['😺', '😸', '😻', '🐱', '🐈', '🙀', '😽', '😼', '👍', '❤️', '😂', '😊', '🎉', '🔥', '✨', '🐾', '👋', '💬', '⭐', '💯'];
 
 function App() {
   // Simplified Onboarding State
@@ -33,6 +34,8 @@ function App() {
   const [, setIsConnected] = useState(false);
   const [theme, setTheme] = useState('light'); // light, dark, pink
   const [isMuted, setIsMuted] = useState(false);
+  const [messageSoundOn, setMessageSoundOn] = useState(true);
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
 
   // Chat State
   const [message, setMessage] = useState('');
@@ -48,11 +51,16 @@ function App() {
   const [modalTab, setModalTab] = useState('create'); // 'create' or 'join'
   const [inputRoomId, setInputRoomId] = useState('');
   const [, setRoomLink] = useState('');
+  const [roomJoinError, setRoomJoinError] = useState(null);
 
   const socketRef = useRef(null);
   const typingTimeoutRef = useRef(null);
   const messagesEndRef = useRef(null);
   const meowAudioRef = useRef(new Audio('https://www.myinstants.com/media/sounds/meow_1.mp3'));
+  const messageSoundRef = useRef(null);
+  if (!messageSoundRef.current) {
+    messageSoundRef.current = new Audio('https://assets.mixkit.co/active_storage/sfx/2560-message-pop-alert.mp3');
+  }
   const dragRef = useRef({ startX: 0, msg: null, lastOffset: 0 });
   const swipeCleanupRef = useRef(null);
   const triggerMeowStormRef = useRef(null);
@@ -80,21 +88,49 @@ function App() {
   const roomIdRef = useRef(roomId);
   useEffect(() => { roomIdRef.current = roomId; }, [roomId]);
 
-  useEffect(() => {
-    socketRef.current = io(SOCKET_URL);
+  const messageSoundOnRef = useRef(messageSoundOn);
+  useEffect(() => { messageSoundOnRef.current = messageSoundOn; }, [messageSoundOn]);
 
-    socketRef.current.on('connect', () => {
+  const statusRef = useRef(status);
+  useEffect(() => { statusRef.current = status; }, [status]);
+
+  useEffect(() => {
+    const socket = io(SOCKET_URL, { reconnection: true, reconnectionAttempts: 10, reconnectionDelay: 1000 });
+    socketRef.current = socket;
+
+    socket.on('connect', () => {
       console.log("Connected to server");
       setIsConnected(true);
+      // Re-join queue or room after reconnect (e.g. server restart or network blip)
+      const currentStatus = statusRef.current;
+      const currentRoomId = roomIdRef.current;
+      const currentProfile = profileRef.current;
+      if (currentStatus === 'waiting' && !currentRoomId && currentProfile?.name) {
+        socket.emit('join_queue', currentProfile);
+      }
+      if (currentStatus === 'connected' && currentRoomId && currentProfile?.name) {
+        socket.emit('join_private_room', { roomId: currentRoomId, profile: currentProfile });
+      }
     });
 
-    socketRef.current.on('disconnect', () => {
+    socket.on('disconnect', (reason) => {
       setIsConnected(false);
+      if (reason === 'io server disconnect') {
+        console.warn('Server disconnected the socket');
+      }
     });
 
-    socketRef.current.on('user_count', (count) => setOnlineCount(count));
+    socket.on('connect_error', (err) => {
+      console.warn('Socket connect_error:', err.message);
+    });
 
-    socketRef.current.on('chat_start', (data) => {
+    socket.on('error', (err) => {
+      console.warn('Socket error:', err);
+    });
+
+    socket.on('user_count', (count) => setOnlineCount(count));
+
+    socket.on('chat_start', (data) => {
       setStatus('connected');
       setPartner(data.partner);
       setChat([]);
@@ -102,36 +138,46 @@ function App() {
       setStep(1);
     });
 
-    socketRef.current.on('receive_message', (data) => {
+    socket.on('receive_message', (data) => {
       setIsPartnerTyping(false);
-      // For group chat, we might have system messages or messages with a sender
       setChat((prev) => [...prev, { ...data, isMe: false }]);
-      // If it's a new person chatting, we might want to set them as a "primary" partner for 1-on-1 feel
-      // but for group chat we just show them in the box.
       if (data.sender && !partner) {
         setPartner(data.sender);
       }
+      if (data.messageId && data.senderSocketId && !data.isSystem) {
+        socketRef.current?.emit('message_delivered', { messageId: data.messageId, senderSocketId: data.senderSocketId });
+      }
+      if (messageSoundOnRef.current && !data.isSystem) {
+        messageSoundRef.current?.play().catch(() => {});
+      }
     });
 
-    socketRef.current.on('partner_meow', () => {
+    socket.on('message_delivered', (data) => {
+      const { messageId } = data;
+      if (messageId) {
+        setChat((prev) => prev.map((m) => (m.id === messageId ? { ...m, delivered: true } : m)));
+      }
+    });
+
+    socket.on('partner_meow', () => {
       triggerMeowStormRef.current?.();
       if (!isMuted) meowAudioRef.current.play().catch(() => { });
     });
 
-    socketRef.current.on('partner_typing', () => setIsPartnerTyping(true));
-    socketRef.current.on('partner_stop_typing', () => setIsPartnerTyping(false));
+    socket.on('partner_typing', () => setIsPartnerTyping(true));
+    socket.on('partner_stop_typing', () => setIsPartnerTyping(false));
 
-    socketRef.current.on('partner_disconnected', () => {
+    socket.on('partner_disconnected', () => {
       setStatus('waiting');
       setChat([]);
       setPartner(null);
       setIsPartnerTyping(false);
       if (!roomId) {
-        socketRef.current.emit('join_queue', profileRef.current);
+        socketRef.current?.emit('join_queue', profileRef.current);
       }
     });
 
-    socketRef.current.on('room_created', (data) => {
+    socket.on('room_created', (data) => {
       const url = new URL(window.location.href);
       url.searchParams.set('room', data.roomId);
       setRoomLink(url.toString());
@@ -142,7 +188,8 @@ function App() {
       setStep(1);
     });
 
-    socketRef.current.on('room_joined', (data) => {
+    socket.on('room_joined', (data) => {
+      setRoomJoinError(null);
       setRoomId(data.roomId);
       setRoomName(data.roomName);
       setRoomCreator(data.creatorName);
@@ -150,34 +197,35 @@ function App() {
       setStep(1);
     });
 
-    socketRef.current.on('partner_joined', (data) => {
+    socket.on('partner_joined', (data) => {
       setStatus('connected');
       setPartner(data.partner);
       // Don't clear chat here if it's a join message for an existing room
     });
 
-    socketRef.current.on('request_partner_info', () => {
-      socketRef.current.emit('send_partner_info', {
+    socket.on('request_partner_info', () => {
+      socketRef.current?.emit('send_partner_info', {
         roomId: roomIdRef.current,
         profile: profileRef.current
       });
     });
 
-    socketRef.current.on('room_error', (data) => {
-      alert(data.message);
+    socket.on('room_error', (data) => {
+      setRoomJoinError(data.message || 'Room not found or code invalid.');
       setStep(0);
       setShowRoomModal(true);
+      setModalTab('join');
     });
 
-    socketRef.current.on('lobby_count', (count) => {
+    socket.on('lobby_count', (count) => {
       setLobbyCount(count);
     });
 
-    socketRef.current.on('room_count', (count) => {
+    socket.on('room_count', (count) => {
       setRoomUserCount(count);
     });
 
-    socketRef.current.on('room_info_preview', (data) => {
+    socket.on('room_info_preview', (data) => {
       setRoomName(data.roomName);
       setRoomCreator(data.creatorName);
     });
@@ -187,10 +235,13 @@ function App() {
     const roomFromUrl = urlParams.get('room');
     if (roomFromUrl) {
       setRoomId(roomFromUrl);
-      socketRef.current.emit('get_room_info', { roomId: roomFromUrl });
+      socket.emit('get_room_info', { roomId: roomFromUrl });
     }
 
-    return () => socketRef.current.disconnect();
+    return () => {
+      socketRef.current?.disconnect();
+      socketRef.current = null;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional: run once on mount only
   }, []);
 
@@ -211,15 +262,15 @@ function App() {
     setChat([]);
     setPartner(null);
     setRoomId(null);
-    socketRef.current.emit('register_cat', { userId: profile.userId, profile });
-    socketRef.current.emit('join_queue', profile);
+    socketRef.current?.emit('register_cat', { userId: profile.userId, profile });
+    socketRef.current?.emit('join_queue', profile);
   };
 
   const handleCreateRoom = (e) => {
     if (e) e.preventDefault();
     if (roomName.trim() && profile.name.trim()) {
-      socketRef.current.emit('register_cat', { userId: profile.userId, profile });
-      socketRef.current.emit('create_room', { roomName, profile });
+      socketRef.current?.emit('register_cat', { userId: profile.userId, profile });
+      socketRef.current?.emit('create_room', { roomName, profile });
       setStep(1);
       setStatus('waiting');
       setShowRoomModal(false);
@@ -229,8 +280,9 @@ function App() {
   const handleJoinRoom = (e) => {
     if (e) e.preventDefault();
     if (inputRoomId.trim() && profile.name.trim()) {
-      socketRef.current.emit('register_cat', { userId: profile.userId, profile });
-      socketRef.current.emit('join_private_room', { roomId: inputRoomId.trim(), profile });
+      setRoomJoinError(null);
+      socketRef.current?.emit('register_cat', { userId: profile.userId, profile });
+      socketRef.current?.emit('join_private_room', { roomId: inputRoomId.trim(), profile });
       setStep(1);
       setStatus('waiting');
       setShowRoomModal(false);
@@ -240,35 +292,38 @@ function App() {
   const handleStartChat = () => {
     if (profile.name.trim() && profile.gender) {
       if (roomId) {
-        socketRef.current.emit('join_private_room', { roomId, profile });
+        socketRef.current?.emit('join_private_room', { roomId, profile });
         setStep(1);
         setStatus('waiting');
       } else {
-        socketRef.current.emit('join_queue', profile);
+        socketRef.current?.emit('join_queue', profile);
         // Otherwise, join the public queue
         handleJoinQueue();
       }
     }
   };
 
+  const [copyFeedback, setCopyFeedback] = useState(false);
   const copyRoomCode = () => {
     if (roomId) {
-      navigator.clipboard.writeText(roomId);
-      // Optional: add a temporary tooltip or notification
+      navigator.clipboard.writeText(roomId).then(() => {
+        setCopyFeedback(true);
+        setTimeout(() => setCopyFeedback(false), 2000);
+      }).catch(() => {});
     }
   };
 
   const handleMeow = () => {
-    socketRef.current.emit('meow', { roomId });
+    socketRef.current?.emit('meow', { roomId });
     triggerMeowStorm();
     if (!isMuted) meowAudioRef.current.play().catch(() => { });
   };
 
   const handleTyping = () => {
-    socketRef.current.emit('typing', { roomId });
+    socketRef.current?.emit('typing', { roomId });
     if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
     typingTimeoutRef.current = setTimeout(() => {
-      socketRef.current.emit('stop_typing', { roomId });
+      socketRef.current?.emit('stop_typing', { roomId });
     }, 1000);
   };
 
@@ -344,27 +399,29 @@ function App() {
 
   const sendMessage = (e) => {
     e.preventDefault();
-    if (message.trim() && status === 'connected') {
-      const timestamp = new Date().toISOString();
-      const msgData = {
-        message,
-        isMe: true,
-        timestamp,
-        userId: profile.userId,
-        replyTo: replyingTo // Include reply metadata
-      };
+    if (!message.trim() || status !== 'connected' || !socketRef.current?.connected) return;
+    const messageId = `msg_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+    const timestamp = new Date().toISOString();
+    const msgData = {
+      message,
+      isMe: true,
+      timestamp,
+      userId: profile.userId,
+      replyTo: replyingTo,
+      id: messageId
+    };
 
-      socketRef.current.emit('send_message', {
-        message,
-        roomId,
-        profile,
-        replyTo: replyingTo
-      });
-      socketRef.current.emit('stop_typing', { roomId });
-      setChat((prev) => [...prev, msgData]);
-      setMessage('');
-      setReplyingTo(null); // Clear reply after sending
-    }
+    socketRef.current?.emit('send_message', {
+      message,
+      roomId,
+      profile,
+      replyTo: replyingTo,
+      messageId
+    });
+    socketRef.current?.emit('stop_typing', { roomId });
+    setChat((prev) => [...prev, msgData]);
+    setMessage('');
+    setReplyingTo(null);
   };
 
   const handleLeaveRoom = () => {
@@ -374,13 +431,13 @@ function App() {
   };
 
   const handleSkip = () => {
-    socketRef.current.emit('skip_chat');
+    socketRef.current?.emit('skip_chat');
     handleJoinQueue(); // Rejoin queue after skipping
   };
 
   const handleHome = () => {
     if (status === 'connected' || status === 'waiting') {
-      socketRef.current.emit('skip_chat');
+      socketRef.current?.emit('skip_chat');
     }
     setStep(0);
     setStatus('idle');
@@ -422,9 +479,14 @@ function App() {
           </div>
           <div className="header-status">
             {roomId && (
-              <div className="status-item room-code-pill" onClick={copyRoomCode} title="Click to copy Room Code">
-                <span className="count-label">Room Code:</span>
-                <span className="count-value code-accent">{roomId}</span>
+              <div className="status-item room-code-wrap">
+                <div className="room-code-pill" onClick={copyRoomCode} title="Click to copy">
+                  <span className="count-label">Room Code:</span>
+                  <span className="count-value code-accent">{roomId}</span>
+                </div>
+                <button type="button" className="copy-room-btn" onClick={copyRoomCode} title="Copy Room Code">
+                  {copyFeedback ? '✓ Copied!' : '📋 Copy'}
+                </button>
               </div>
             )}
             <div className="status-item online-cats-pill">
@@ -438,8 +500,11 @@ function App() {
               <button onClick={toggleTheme} className="theme-toggle-btn" title="Change Theme">
                 <span className="cat-icon-theme">✨😺</span>
               </button>
-              <button onClick={() => setIsMuted(!isMuted)} className="mute-toggle-btn" title="Toggle Sound">
+              <button onClick={() => setIsMuted(!isMuted)} className="mute-toggle-btn" title="Meow sound">
                 {isMuted ? '🔕' : '🔔'}
+              </button>
+              <button onClick={() => setMessageSoundOn(!messageSoundOn)} className="mute-toggle-btn" title="New message sound">
+                {messageSoundOn ? '💬' : '🔇'}
               </button>
             </div>
           </div>
@@ -578,6 +643,11 @@ function App() {
                           </div>
                         ) : (
                           <div className="tab-pane">
+                            {roomJoinError && (
+                              <div className="room-join-error" role="alert">
+                                {roomJoinError}
+                              </div>
+                            )}
                             <form onSubmit={handleJoinRoom}>
                               <div className="modal-input-group">
                                 <input
@@ -593,7 +663,10 @@ function App() {
                                   type="text"
                                   placeholder="Secret Room Code..."
                                   value={inputRoomId}
-                                  onChange={(e) => setInputRoomId(e.target.value)}
+                                  onChange={(e) => {
+                                    setInputRoomId(e.target.value);
+                                    setRoomJoinError(null);
+                                  }}
                                   required
                                 />
                               </div>
@@ -675,9 +748,14 @@ function App() {
                       <div className="waiting-info">
                         <p className="waiting-text">{roomId ? `Waiting for friends in ${roomName || 'Private Room'}...` : `Searching for a match for ${profile.name}...`}</p>
                         {roomId && (
-                          <div className="room-code-display" onClick={copyRoomCode} title="Click to copy Room Code">
-                            <span className="code-label">CODE:</span>
-                            <span className="code-value">{roomId}</span>
+                          <div className="room-code-display-wrap">
+                            <div className="room-code-display" onClick={copyRoomCode} title="Click to copy">
+                              <span className="code-label">CODE:</span>
+                              <span className="code-value">{roomId}</span>
+                            </div>
+                            <button type="button" className="copy-room-btn-inline" onClick={copyRoomCode}>
+                              {copyFeedback ? '✓ Copied!' : '📋 Copy Room Code'}
+                            </button>
                           </div>
                         )}
                       </div>
@@ -737,7 +815,10 @@ function App() {
                               )}
 
                               <div className="message-text">{msg.message}</div>
-                              <div className="message-time">{formatTime(msg.timestamp)}</div>
+                              <div className="message-meta-row">
+                                <span className="message-time">{formatTime(msg.timestamp)}</span>
+                                {msg.isMe && msg.delivered && <span className="message-receipt" title="Delivered">✓</span>}
+                              </div>
                             </div>
                           </div>
                         )
@@ -768,6 +849,24 @@ function App() {
                           </button>
                         </div>
                       )}
+                      {showEmojiPicker && (
+                        <div className="emoji-picker-panel">
+                          {EMOJI_PICKER_LIST.map((emoji, i) => (
+                            <button
+                              key={i}
+                              type="button"
+                              className="emoji-picker-item"
+                              onClick={() => {
+                                setMessage((m) => m + emoji);
+                                handleTyping();
+                              }}
+                            >
+                              {emoji}
+                            </button>
+                          ))}
+                          <button type="button" className="emoji-picker-close" onClick={() => setShowEmojiPicker(false)}>✕</button>
+                        </div>
+                      )}
                       <form className="input-area" onSubmit={sendMessage}>
                         <input
                           type="text"
@@ -778,6 +877,9 @@ function App() {
                             handleTyping();
                           }}
                         />
+                        <button type="button" className="emoji-trigger-btn" onClick={() => setShowEmojiPicker((v) => !v)} title="Insert emoji">
+                          😺
+                        </button>
                         <button type="button" className="meow-btn" onClick={handleMeow} title="Send a Meow!">
                           <img src="https://robohash.org/premium-meow.png?set=set4&size=100x100" alt="Meow" />
                         </button>
