@@ -1355,26 +1355,45 @@ body {
   }
 }
 
-/* Swipe to Reply Styles */
+/* Swipe to Reply Styles - works on touch (mobile/tablet) and mouse (laptop/desktop) */
 .message-row {
   position: relative;
   transition: transform 0.1s linear;
   user-select: none;
   touch-action: pan-y;
+  -webkit-user-select: none;
 }
 
 .swipe-indicator {
   position: absolute;
-  left: -40px;
   top: 50%;
   transform: translateY(-50%);
-  font-size: 1.2rem;
+  font-size: 0.85rem;
   opacity: 0;
-  transition: opacity 0.2s ease, left 0.2s ease;
+  transition: opacity 0.2s ease;
   color: var(--primary-accent);
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+.swipe-indicator-left {
+  left: -52px;
+}
+
+.swipe-indicator-right {
+  left: auto;
+  right: -52px;
 }
 
 .message-row.swiping-active .swipe-indicator {
+  transition: opacity 0.15s ease;
+}
+
+.message-row.swiping-active.swipe-direction-right .swipe-indicator-left {
+  opacity: 1;
+}
+
+.message-row.swiping-active.swipe-direction-left .swipe-indicator-right {
   opacity: 1;
 }
 

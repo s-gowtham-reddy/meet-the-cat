@@ -52,6 +52,8 @@ function App() {
   const typingTimeoutRef = useRef(null);
   const messagesEndRef = useRef(null);
   const meowAudioRef = useRef(new Audio('https://www.myinstants.com/media/sounds/meow_1.mp3'));
+  const dragRef = useRef({ startX: 0, msg: null, lastOffset: 0 });
+  const swipeCleanupRef = useRef(null);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -258,22 +260,27 @@ function App() {
     }, 1000);
   };
 
-  const handleSwipeStart = (e, msgId) => {
-    const touch = e.touches ? e.touches[0] : e;
-    setSwipeData({ id: msgId, startX: touch.clientX, offset: 0 });
+  const SWIPE_THRESHOLD = 60;
+  const SWIPE_MAX_OFFSET = 120;
+
+  const applySwipeMove = (clientX) => {
+    const drag = dragRef.current;
+    if (!drag?.msg) return;
+    const diff = Math.max(-SWIPE_MAX_OFFSET, Math.min(SWIPE_MAX_OFFSET, clientX - drag.startX));
+    drag.lastOffset = diff;
+    setSwipeData(prev => (prev.id !== null ? { ...prev, offset: diff } : prev));
   };
 
   const handleSwipeMove = (e) => {
-    if (!swipeData.id) return;
-    const touch = e.touches ? e.touches[0] : e;
-    const diff = touch.clientX - swipeData.startX;
-    if (diff > 0 && diff < 100) {
-      setSwipeData(prev => ({ ...prev, offset: diff }));
-    }
+    const clientX = e.touches ? e.touches[0]?.clientX : e.clientX;
+    if (clientX == null) return;
+    applySwipeMove(clientX);
   };
 
-  const handleSwipeEnd = (msg) => {
-    if (swipeData.offset > 60) {
+  const handleSwipeEnd = (msgParam) => {
+    const msg = msgParam ?? dragRef.current?.msg;
+    const lastOffset = dragRef.current?.lastOffset ?? 0;
+    if (msg && Math.abs(lastOffset) >= SWIPE_THRESHOLD) {
       setReplyingTo({
         text: msg.message,
         name: msg.isMe ? 'You' : (msg.sender?.name || partner?.name || 'Stranger'),
@@ -281,7 +288,46 @@ function App() {
       });
       if (window.navigator.vibrate) window.navigator.vibrate(10);
     }
+    swipeCleanupRef.current?.();
+    swipeCleanupRef.current = null;
+    dragRef.current = { startX: 0, msg: null, lastOffset: 0 };
     setSwipeData({ id: null, offset: 0 });
+  };
+
+  const handleSwipeStart = (e, msgId, msg) => {
+    const touch = e.touches ? e.touches[0] : e;
+    const startX = touch?.clientX ?? 0;
+    dragRef.current = { startX, msg, lastOffset: 0 };
+    setSwipeData({ id: msgId, startX, offset: 0 });
+
+    if (e.type === 'mousedown') {
+      const onDocMouseMove = (ev) => handleSwipeMove(ev);
+      const onDocMouseUp = () => handleSwipeEnd();
+      document.addEventListener('mousemove', onDocMouseMove);
+      document.addEventListener('mouseup', onDocMouseUp);
+      swipeCleanupRef.current = () => {
+        document.removeEventListener('mousemove', onDocMouseMove);
+        document.removeEventListener('mouseup', onDocMouseUp);
+      };
+      return;
+    }
+
+    if (e.type === 'touchstart') {
+      const onDocTouchMove = (ev) => {
+        if (dragRef.current?.msg && ev.cancelable) {
+          ev.preventDefault();
+          const t = ev.touches[0];
+          if (t) applySwipeMove(t.clientX);
+        }
+      };
+      const onDocTouchEnd = () => handleSwipeEnd();
+      document.addEventListener('touchmove', onDocTouchMove, { passive: false });
+      document.addEventListener('touchend', onDocTouchEnd, { passive: true });
+      swipeCleanupRef.current = () => {
+        document.removeEventListener('touchmove', onDocTouchMove);
+        document.removeEventListener('touchend', onDocTouchEnd);
+      };
+    }
   };
 
   const sendMessage = (e) => {
@@ -649,19 +695,20 @@ function App() {
                         ) : (
                           <div
                             key={index}
-                            className={`message-row ${msg.isMe ? 'my-row' : 'stranger-row'} ${swipeData.id === index ? 'swiping-active' : ''}`}
+                            className={`message-row ${msg.isMe ? 'my-row' : 'stranger-row'} ${swipeData.id === index ? 'swiping-active' : ''} ${swipeData.id === index && swipeData.offset >= 0 ? 'swipe-direction-right' : ''} ${swipeData.id === index && swipeData.offset < 0 ? 'swipe-direction-left' : ''}`}
                             style={{
                               transform: swipeData.id === index ? `translateX(${swipeData.offset}px)` : 'none'
                             }}
-                            onTouchStart={(e) => handleSwipeStart(e, index)}
+                            title="Swipe or drag left/right to reply"
+                            onTouchStart={(e) => handleSwipeStart(e, index, msg)}
                             onTouchMove={handleSwipeMove}
                             onTouchEnd={() => handleSwipeEnd(msg)}
-                            onMouseDown={(e) => handleSwipeStart(e, index)}
+                            onMouseDown={(e) => handleSwipeStart(e, index, msg)}
                             onMouseMove={handleSwipeMove}
                             onMouseUp={() => handleSwipeEnd(msg)}
-                            onMouseLeave={() => setSwipeData({ id: null, offset: 0 })}
                           >
-                            <div className="swipe-indicator">🐾↩️</div>
+                            <div className="swipe-indicator swipe-indicator-left" aria-hidden>🐾 Reply</div>
+                            <div className="swipe-indicator swipe-indicator-right" aria-hidden>Reply 🐾</div>
                             <div className="avatar">
                               <img src={getCatUrl(msg.isMe ? profile.avatarSeed : (msg.sender?.avatarSeed || partner?.avatarSeed))} alt="p" />
                             </div>
