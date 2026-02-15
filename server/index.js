@@ -2,6 +2,7 @@ const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
 const cors = require('cors');
+const rateLimit = require('express-rate-limit');
 const mongoose = require('mongoose');
 const geoip = require('geoip-lite');
 const requestIp = require('request-ip');
@@ -13,6 +14,31 @@ const UniqueVisitor = require('./models/UniqueVisitor');
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
 
 const app = express();
+
+// Trust proxy for correct IP when behind reverse proxy (e.g. production)
+app.set('trust proxy', 1);
+
+// HTTPS redirect in production (when behind a proxy that sets x-forwarded-proto)
+if (process.env.NODE_ENV === 'production') {
+    app.use((req, res, next) => {
+        const proto = req.get('x-forwarded-proto');
+        if (proto === 'http') {
+            return res.redirect(301, `https://${req.get('host')}${req.url}`);
+        }
+        next();
+    });
+}
+
+// HTTP rate limiting: 100 requests per 15 minutes per IP
+const httpLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 100,
+    message: { error: 'Too many requests; please try again later.' },
+    standardHeaders: true,
+    legacyHeaders: false
+});
+app.use(httpLimiter);
+
 // More permissive CORS for easier debugging during initial deployment
 app.use(cors({
     origin: [FRONTEND_URL, 'https://meet-the-cat.vercel.app'],
@@ -44,6 +70,51 @@ let pairs = {}; // socket.id -> partner's socket.id
 let privateRooms = {}; // roomId -> { roomName, creatorName }
 let activeSessions = {}; // socketId -> { startTime, gender, username, type, roomId, location }
 let usedCodes = new Map(); // roomId -> expiry timestamp
+
+// Socket event rate limits: max events per minute per socket
+const SOCKET_RATE_LIMITS = {
+    send_message: 60,
+    meow: 30,
+    join_queue: 10,
+    create_room: 10,
+    join_private_room: 15,
+    typing: 120,
+    stop_typing: 120
+};
+const socketRateCounts = new Map(); // key: `${socketId}:${eventName}` -> { count, resetAt }
+
+function checkSocketRateLimit(socketId, eventName) {
+    const limit = SOCKET_RATE_LIMITS[eventName];
+    if (!limit) return true;
+    const key = `${socketId}:${eventName}`;
+    const now = Date.now();
+    const windowMs = 60 * 1000;
+    let entry = socketRateCounts.get(key);
+    if (!entry || entry.resetAt < now) {
+        entry = { count: 0, resetAt: now + windowMs };
+        socketRateCounts.set(key, entry);
+    }
+    entry.count++;
+    if (entry.count > limit) return false;
+    return true;
+}
+
+function cleanupSocketRateLimits(socketId) {
+    for (const key of socketRateCounts.keys()) {
+        if (key.startsWith(`${socketId}:`)) socketRateCounts.delete(key);
+    }
+}
+
+const MAX_MESSAGE_LENGTH = 2000;
+
+function sanitizeMessage(input) {
+    if (input == null || typeof input !== 'string') return '';
+    let s = input.trim();
+    s = s.replace(/<[^>]*>/g, ''); // Strip HTML tags
+    s = s.replace(/\s+/g, ' '); // Normalize whitespace to single space
+    if (s.length > MAX_MESSAGE_LENGTH) s = s.slice(0, MAX_MESSAGE_LENGTH);
+    return s.trim();
+}
 
 function generateRoomCode() {
     const mainChars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
@@ -147,6 +218,7 @@ io.on('connection', (socket) => {
 
     socket.on('join_queue', (profile) => {
         if (!profile || !profile.name || !profile.gender) return;
+        if (!checkSocketRateLimit(socket.id, 'join_queue')) return;
 
         // Ensure user is not in a private room
         socket.leaveAll();
@@ -170,6 +242,7 @@ io.on('connection', (socket) => {
 
     socket.on('create_room', async (data) => {
         const { roomName, profile } = data;
+        if (!checkSocketRateLimit(socket.id, 'create_room')) return;
         const roomId = generateRoomCode();
         privateRooms[roomId] = {
             roomName,
@@ -203,7 +276,10 @@ io.on('connection', (socket) => {
 
     socket.on('join_private_room', async (data) => {
         const { roomId, profile } = data;
-
+        if (!checkSocketRateLimit(socket.id, 'join_private_room')) {
+            socket.emit('room_error', { message: 'Too many join attempts. Please wait a moment. 🐾' });
+            return;
+        }
         if (!privateRooms[roomId]) {
             socket.emit('room_error', { message: 'This room code is invalid or has expired. 🐾🚫' });
             return;
@@ -264,10 +340,13 @@ io.on('connection', (socket) => {
 
     socket.on('send_message', async (data) => {
         const { message, roomId, profile } = data;
+        if (!checkSocketRateLimit(socket.id, 'send_message')) return;
+        const sanitized = sanitizeMessage(message);
+        if (!sanitized) return;
         if (roomId) {
             // Private room message - broadcast to EVERYONE else in the room
             const msgData = {
-                message: message,
+                message: sanitized,
                 sender: profile ? { name: profile.name, avatarSeed: profile.avatarSeed } : null,
                 userId: profile?.userId,
                 timestamp: new Date().toISOString(),
@@ -280,7 +359,7 @@ io.on('connection', (socket) => {
             const partnerId = pairs[socket.id];
             if (partnerId) {
                 const msgData = {
-                    message: message,
+                    message: sanitized,
                     userId: profile?.userId,
                     timestamp: new Date().toISOString(),
                     replyTo: data.replyTo // Add reply metadata
@@ -291,6 +370,7 @@ io.on('connection', (socket) => {
     });
 
     socket.on('meow', (data) => {
+        if (!checkSocketRateLimit(socket.id, 'meow')) return;
         const roomId = data?.roomId;
         if (roomId) {
             socket.to(roomId).emit('partner_meow');
@@ -303,6 +383,7 @@ io.on('connection', (socket) => {
     });
 
     socket.on('typing', (data) => {
+        if (!checkSocketRateLimit(socket.id, 'typing')) return;
         const roomId = data?.roomId;
         if (roomId) {
             socket.to(roomId).emit('partner_typing');
@@ -313,6 +394,7 @@ io.on('connection', (socket) => {
     });
 
     socket.on('stop_typing', (data) => {
+        if (!checkSocketRateLimit(socket.id, 'stop_typing')) return;
         const roomId = data?.roomId;
         if (roomId) {
             socket.to(roomId).emit('partner_stop_typing');
@@ -352,6 +434,7 @@ io.on('connection', (socket) => {
 
     socket.on('disconnect', () => {
         console.log('User Disconnected', socket.id);
+        cleanupSocketRateLimits(socket.id);
         unpairUser(socket.id);
         broadcastUserCount();
     });
