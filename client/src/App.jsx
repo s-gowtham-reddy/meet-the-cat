@@ -1,20 +1,21 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import io from 'socket.io-client'
 import { DotLottieReact } from '@lottiefiles/dotlottie-react'
 import './index.css'
 
 const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:3001';
 const AVATAR_SEEDS = ['Felix', 'Whiskers', 'Garfield', 'Tom', 'Luna', 'Mittens', 'Simba', 'Nala'];
+const MEOW_EMOJIS = ['MEOW! 🐾', '🐾', '🐱', '🐱‍👤', '✨'];
 
 function App() {
   // Simplified Onboarding State
   const [step, setStep] = useState(0); // 0: Setup Identity, 1: Chat/Waiting
-  const [profile, setProfile] = useState({
+  const [profile, setProfile] = useState(() => ({
     name: '',
     avatarSeed: AVATAR_SEEDS[0],
     gender: 'male',
     userId: localStorage.getItem('cat_user_id') || `user_${Math.random().toString(36).substr(2, 9)}`
-  });
+  }));
   const [replyingTo, setReplyingTo] = useState(null);
   const [swipeData, setSwipeData] = useState({ id: null, offset: 0 });
 
@@ -26,10 +27,10 @@ function App() {
   }, [profile.userId]);
 
   // UI / Global State
-  const [onlineCount, setOnlineCount] = useState(0);
+  const [, setOnlineCount] = useState(0);
   const [lobbyCount, setLobbyCount] = useState(0);
   const [roomUserCount, setRoomUserCount] = useState(0);
-  const [isConnected, setIsConnected] = useState(false);
+  const [, setIsConnected] = useState(false);
   const [theme, setTheme] = useState('light'); // light, dark, pink
   const [isMuted, setIsMuted] = useState(false);
 
@@ -46,7 +47,7 @@ function App() {
   const [showRoomModal, setShowRoomModal] = useState(false);
   const [modalTab, setModalTab] = useState('create'); // 'create' or 'join'
   const [inputRoomId, setInputRoomId] = useState('');
-  const [roomLink, setRoomLink] = useState('');
+  const [, setRoomLink] = useState('');
 
   const socketRef = useRef(null);
   const typingTimeoutRef = useRef(null);
@@ -54,10 +55,20 @@ function App() {
   const meowAudioRef = useRef(new Audio('https://www.myinstants.com/media/sounds/meow_1.mp3'));
   const dragRef = useRef({ startX: 0, msg: null, lastOffset: 0 });
   const swipeCleanupRef = useRef(null);
+  const triggerMeowStormRef = useRef(null);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
+
+  const triggerMeowStorm = () => {
+    setShowMeowAnim(true);
+    setTimeout(() => setShowMeowAnim(false), 2500);
+  };
+
+  useEffect(() => {
+    triggerMeowStormRef.current = triggerMeowStorm;
+  });
 
   useEffect(() => {
     scrollToBottom();
@@ -103,7 +114,7 @@ function App() {
     });
 
     socketRef.current.on('partner_meow', () => {
-      triggerMeowStorm();
+      triggerMeowStormRef.current?.();
       if (!isMuted) meowAudioRef.current.play().catch(() => { });
     });
 
@@ -180,13 +191,19 @@ function App() {
     }
 
     return () => socketRef.current.disconnect();
-  }, []); // Only run once on mount!
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional: run once on mount only
+  }, []);
 
 
-  useEffect(() => {
-    // Handling mute status separately if needed, but better to check isMuted in listeners directly
-    // or use a ref for isMuted too.
-  }, [isMuted]);
+  const meowStormItems = useMemo(() => {
+    if (!showMeowAnim) return [];
+    return Array.from({ length: 15 }, () => ({
+      left: Math.random() * 100,
+      delay: Math.random() * 0.5,
+      fontSize: 1 + Math.random() * 2,
+      emoji: MEOW_EMOJIS[Math.floor(Math.random() * MEOW_EMOJIS.length)]
+    }));
+  }, [showMeowAnim]);
 
   const handleJoinQueue = () => {
     if (step === 0) setStep(1);
@@ -239,11 +256,6 @@ function App() {
       navigator.clipboard.writeText(roomId);
       // Optional: add a temporary tooltip or notification
     }
-  };
-
-  const triggerMeowStorm = () => {
-    setShowMeowAnim(true);
-    setTimeout(() => setShowMeowAnim(false), 2500);
   };
 
   const handleMeow = () => {
@@ -390,7 +402,7 @@ function App() {
       // Fallback for cases where timestamp might already be formatted (legacy or edge cases)
       if (isNaN(date.getTime())) return timestamp;
       return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    } catch (e) {
+    } catch {
       return timestamp;
     }
   };
@@ -778,13 +790,13 @@ function App() {
                       </form>
                       {showMeowAnim && (
                         <div className="meow-storm-overlay">
-                          {[...Array(15)].map((_, i) => (
+                          {meowStormItems.map((item, i) => (
                             <div key={i} className="storm-item" style={{
-                              left: `${Math.random() * 100}%`,
-                              animationDelay: `${Math.random() * 0.5}s`,
-                              fontSize: `${1 + Math.random() * 2}rem`
+                              left: `${item.left}%`,
+                              animationDelay: `${item.delay}s`,
+                              fontSize: `${item.fontSize}rem`
                             }}>
-                              {['MEOW! 🐾', '🐾', '🐱', '🐱‍👤', '✨'][Math.floor(Math.random() * 5)]}
+                              {item.emoji}
                             </div>
                           ))}
                         </div>
