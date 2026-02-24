@@ -7,7 +7,7 @@
 ## ✨ Features
 
 -   **Instant Anonymous Pairing**: Get matched 1-on-1 with another feline enthusiast in seconds.
--   **Interactive Meow Storm**: Click the premium "Meow!" button to trigger a synchronized burst of meows, paws, and sparkles across the entire chat for both users.
+-   **Cat-Themed Stickers**: Send expressive cat stickers to your match.
 -   **Premium Glassmorphism UI**: A stunning, modern design with smooth transitions and high-end aesthetics.
 -   **Theme Personalization**: Switch between **Light**, **Dark**, and **Pink** themes to match your cat's mood.
 -   **PWA Ready**: Installable on both Desktop and Mobile (Android/iPhone) for a native app experience.
