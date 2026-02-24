@@ -1677,3 +1677,195 @@ body {
 .message-bubble.my-message .quoted-name {
   color: white;
 }
+/* ===== Searching / Matching Screen (Image 4 Style) ===== */
+.searching-screen {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(135deg, #ff9a9e 0%, #fecfef 50%, #feada6 100%);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.searching-card {
+  background: rgba(255, 255, 255, 0.75);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  width: 90%;
+  max-width: 440px;
+  padding: 40px;
+  border-radius: 40px;
+  text-align: center;
+  box-shadow: 0 15px 45px rgba(255, 107, 107, 0.15);
+  position: relative;
+  z-index: 5;
+}
+
+.searching-avatar-wrap {
+  position: relative;
+  width: 140px;
+  height: 140px;
+  margin: 0 auto 30px;
+}
+
+.searching-avatar {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 4px solid white;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.1);
+}
+
+.avatar-ring {
+  position: absolute;
+  top: -10px;
+  left: -10px;
+  right: -10px;
+  bottom: -10px;
+  border: 2px solid transparent;
+  border-top-color: #e85d75;
+  border-right-color: #ff8e8e;
+  border-radius: 50%;
+  animation: spin 2s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.searching-title {
+  font-size: 1.8rem;
+  font-weight: 800;
+  margin-bottom: 12px;
+  background: linear-gradient(to right, #e85d75, #ff8e8e);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.searching-sub {
+  color: var(--text-main);
+  opacity: 0.7;
+  font-size: 0.95rem;
+  margin-bottom: 25px;
+}
+
+.matching-tags {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  margin-bottom: 35px;
+}
+
+.tag-pill {
+  padding: 6px 16px;
+  border-radius: 20px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  background: rgba(232, 93, 117, 0.1);
+  color: #e85d75;
+}
+
+.progress-container {
+  width: 100%;
+  height: 8px;
+  background: rgba(0, 0, 0, 0.05);
+  border-radius: 10px;
+  margin-bottom: 20px;
+  overflow: hidden;
+  position: relative;
+}
+
+.progress-bar-fill {
+  height: 100%;
+  width: 30%;
+  background: linear-gradient(to right, #e85d75, #ff8e8e);
+  border-radius: 10px;
+  animation: progressMove 3s ease-in-out infinite;
+}
+
+@keyframes progressMove {
+  0% { width: 10%; margin-left: 0; }
+  50% { width: 60%; margin-left: 20%; }
+  100% { width: 10%; margin-left: 90%; }
+}
+
+.estimated-wait {
+  font-size: 0.8rem;
+  color: #888;
+  margin-bottom: 35px;
+}
+
+.cancel-match-btn {
+  width: 100%;
+  padding: 14px;
+  border-radius: 30px;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  background: white;
+  color: var(--text-main);
+  font-weight: 700;
+  font-size: 0.95rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.cancel-match-btn:hover {
+  background: #f8f8f8;
+  transform: translateY(-2px);
+}
+
+.online-counter-badge {
+  position: absolute;
+  bottom: 40px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(255, 255, 255, 0.5);
+  backdrop-filter: blur(10px);
+  padding: 8px 20px;
+  border-radius: 20px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #e85d75;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Floating Elements for BG */
+.floating-element {
+  position: absolute;
+  background: white;
+  width: 50px;
+  height: 50px;
+  padding: 10px;
+  border-radius: 15px;
+  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.05);
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+  animation: floating 6s ease-in-out infinite;
+}
+
+@keyframes floating {
+  0% { transform: translate(0, 0) rotate(0); }
+  33% { transform: translate(15px, -20px) rotate(5deg); }
+  66% { transform: translate(-10px, 15px) rotate(-5deg); }
+  100% { transform: translate(0, 0) rotate(0); }
+}
+
+.float-1 { top: 15%; left: 15%; animation-delay: 0s; }
+.float-2 { bottom: 20%; right: 15%; animation-delay: 1s; }
+.float-3 { top: 70%; left: 10%; animation-delay: 2s; }
+.float-4 { top: 20%; right: 10%; animation-delay: 3s; }

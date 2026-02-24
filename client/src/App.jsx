@@ -148,7 +148,7 @@ function App() {
         socketRef.current?.emit('message_delivered', { messageId: data.messageId, senderSocketId: data.senderSocketId });
       }
       if (messageSoundOnRef.current && !data.isSystem) {
-        messageSoundRef.current?.play().catch(() => {});
+        messageSoundRef.current?.play().catch(() => { });
       }
     });
 
@@ -309,7 +309,7 @@ function App() {
       navigator.clipboard.writeText(roomId).then(() => {
         setCopyFeedback(true);
         setTimeout(() => setCopyFeedback(false), 2000);
-      }).catch(() => {});
+      }).catch(() => { });
     }
   };
 
@@ -450,7 +450,7 @@ function App() {
     window.history.pushState({}, '', window.location.pathname);
   };
 
-  const getCatUrl = (seed) => `https://robohash.org/${seed}.png?set=set4&size=400x400`;
+  const getCatUrl = (seed) => `https://cataas.com/cat?seed=${encodeURIComponent(seed)}&width=200&height=200`;
 
   const formatTime = (timestamp) => {
     if (!timestamp) return '';
@@ -490,7 +490,7 @@ function App() {
               </div>
             )}
             <div className="status-item online-cats-pill">
-              <img src="https://robohash.org/white-brown-cat.png?set=set4&size=200x200" className="online-cat-icon" alt="" />
+              <img src={getCatUrl('online_count')} className="online-cat-icon" alt="" />
               <div className="online-cats-text">
                 <span className="count-label">{roomId ? 'Cats in Room:' : 'Online Cats:'}</span>
                 <span className="count-value">{roomId ? roomUserCount : lobbyCount}</span>
@@ -740,190 +740,231 @@ function App() {
           )}
 
           {step === 1 && (
-            <div className={`chat-layout-wrapper ${status === 'connected' ? 'wide-layout' : 'centered-layout'}`}>
-              <div className="chat-container">
-                <div className="chat-sub-header">
-                  <div className="chat-info">
-                    {status === 'waiting' ? (
-                      <div className="waiting-info">
-                        <p className="waiting-text">{roomId ? `Waiting for friends in ${roomName || 'Private Room'}...` : `Searching for a match for ${profile.name}...`}</p>
-                        {roomId && (
-                          <div className="room-code-display-wrap">
-                            <div className="room-code-display" onClick={copyRoomCode} title="Click to copy">
-                              <span className="code-label">CODE:</span>
-                              <span className="code-value">{roomId}</span>
-                            </div>
-                            <button type="button" className="copy-room-btn-inline" onClick={copyRoomCode}>
-                              {copyFeedback ? '✓ Copied!' : '📋 Copy Room Code'}
-                            </button>
+            <>
+              {status === 'waiting' && !roomId ? (
+                <div className="searching-screen">
+                  {/* Floating Elements for Aesthetic */}
+                  <div className="floating-element float-1">🧶</div>
+                  <div className="floating-element float-2">🐾</div>
+                  <div className="floating-element float-3">🐱</div>
+                  <div className="floating-element float-4">✨</div>
+
+                  <div className="searching-card">
+                    <div className="searching-avatar-wrap">
+                      <div className="avatar-ring"></div>
+                      <img src={getCatUrl(profile.avatarSeed)} className="searching-avatar" alt="My Cat" />
+                    </div>
+
+                    <h2 className="searching-title">Finding your purr-fect match</h2>
+                    <p className="searching-sub">Searching for a chat partner for <strong>{profile.name}</strong>...</p>
+
+                    <div className="matching-tags">
+                      <span className="tag-pill">#Playful</span>
+                      <span className="tag-pill">#NightOwl</span>
+                    </div>
+
+                    <div className="progress-container">
+                      <div className="progress-bar-fill"></div>
+                    </div>
+
+                    <p className="estimated-wait">Estimated wait: &lt; 30s</p>
+
+                    <button className="cancel-match-btn" onClick={handleHome}>
+                      ✕ Cancel Search
+                    </button>
+                  </div>
+
+                  <div className="online-counter-badge">
+                    🐾 {lobbyCount} Cats Online Now
+                  </div>
+                </div>
+              ) : (
+                <div className={`chat-layout-wrapper ${status === 'connected' ? 'wide-layout' : 'centered-layout'}`}>
+                  <div className="chat-container">
+                    <div className="chat-sub-header">
+                      <div className="chat-info">
+                        {status === 'waiting' ? (
+                          <div className="waiting-info">
+                            <p className="waiting-text">{roomId ? `Waiting for friends in ${roomName || 'Private Room'}...` : `Searching for a match for ${profile.name}...`}</p>
+                            {roomId && (
+                              <div className="room-code-display-wrap">
+                                <div className="room-code-display" onClick={copyRoomCode} title="Click to copy">
+                                  <span className="code-label">CODE:</span>
+                                  <span className="code-value">{roomId}</span>
+                                </div>
+                                <button type="button" className="copy-room-btn-inline" onClick={copyRoomCode}>
+                                  {copyFeedback ? '✓ Copied!' : '📋 Copy Room Code'}
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="partner-info">
+                            <img src={getCatUrl(partner?.avatarSeed)} className="partner-mini-avatar" alt="" />
+                            <p>
+                              {roomId ? (
+                                <>Private Room - <strong>{roomName || 'Cat Pack'}</strong></>
+                              ) : (
+                                <>Chatting with <strong>{partner?.name || 'Stranger'}</strong></>
+                              )}
+                            </p>
                           </div>
                         )}
                       </div>
-                    ) : (
-                      <div className="partner-info">
-                        <img src={getCatUrl(partner?.avatarSeed)} className="partner-mini-avatar" alt="" />
-                        <p>
-                          {roomId ? (
-                            <>Private Room - <strong>{roomName || 'Cat Pack'}</strong></>
-                          ) : (
-                            <>Chatting with <strong>{partner?.name || 'Stranger'}</strong></>
+                    </div>
+
+                    {status === 'connected' ? (
+                      <>
+                        <div className="messages-box">
+                          {chat.map((msg, index) => (
+                            msg.isSystem ? (
+                              <div key={index} className="system-message">
+                                <p>{msg.message}</p>
+                              </div>
+                            ) : (
+                              <div
+                                key={index}
+                                className={`message-row ${msg.isMe ? 'my-row' : 'stranger-row'} ${swipeData.id === index ? 'swiping-active' : ''} ${swipeData.id === index && swipeData.offset >= 0 ? 'swipe-direction-right' : ''} ${swipeData.id === index && swipeData.offset < 0 ? 'swipe-direction-left' : ''}`}
+                                style={{
+                                  transform: swipeData.id === index ? `translateX(${swipeData.offset}px)` : 'none'
+                                }}
+                                title="Swipe or drag left/right to reply"
+                                onTouchStart={(e) => handleSwipeStart(e, index, msg)}
+                                onTouchMove={handleSwipeMove}
+                                onTouchEnd={() => handleSwipeEnd(msg)}
+                                onMouseDown={(e) => handleSwipeStart(e, index, msg)}
+                                onMouseMove={handleSwipeMove}
+                                onMouseUp={() => handleSwipeEnd(msg)}
+                              >
+                                <div className="swipe-indicator swipe-indicator-left" aria-hidden>🐾 Reply</div>
+                                <div className="swipe-indicator swipe-indicator-right" aria-hidden>Reply 🐾</div>
+                                <div className="avatar">
+                                  <img src={getCatUrl(msg.isMe ? profile.avatarSeed : (msg.sender?.avatarSeed || partner?.avatarSeed))} alt="p" />
+                                </div>
+                                <div className={`message-bubble ${msg.isMe ? 'my-message' : 'stranger-message'}`}>
+                                  {!msg.isMe && (roomId || msg.sender) && (
+                                    <div className="sender-name">{msg.sender?.name || partner?.name || 'Stranger'}</div>
+                                  )}
+
+                                  {msg.replyTo && (
+                                    <div className="quoted-message">
+                                      <span className="quoted-name">{msg.replyTo.name}</span>
+                                      <div className="quoted-text">{msg.replyTo.text}</div>
+                                    </div>
+                                  )}
+
+                                  <div className="message-text">{msg.message}</div>
+                                  <div className="message-meta-row">
+                                    <span className="message-time">{formatTime(msg.timestamp)}</span>
+                                    {msg.isMe && msg.delivered && <span className="message-receipt" title="Delivered">✓</span>}
+                                  </div>
+                                </div>
+                              </div>
+                            )
+                          ))}
+                          {isPartnerTyping && (
+                            <div className="typing-indicator">
+                              <span className="typing-paw">🐾</span>
+                              <span>{partner?.name || 'Someone'} is typing...</span>
+                            </div>
                           )}
+                          <div ref={messagesEndRef} />
+                        </div>
+
+                        <div className="chat-controls-area">
+                          {replyingTo && (
+                            <div className="reply-preview-container">
+                              <div className="reply-preview-content">
+                                <span className="reply-preview-name">Replying to {replyingTo.name}</span>
+                                <div className="reply-preview-text">{replyingTo.text}</div>
+                              </div>
+                              <button className="cancel-reply-btn" onClick={() => setReplyingTo(null)}>✕</button>
+                            </div>
+                          )}
+                          {status === 'connected' && !roomId && (
+                            <div className="next-cat-container">
+                              <button className="next-cat-btn-glass" onClick={handleSkip}>
+                                Next Cat 🐾
+                              </button>
+                            </div>
+                          )}
+                          {showEmojiPicker && (
+                            <div className="emoji-picker-panel">
+                              {EMOJI_PICKER_LIST.map((emoji, i) => (
+                                <button
+                                  key={i}
+                                  type="button"
+                                  className="emoji-picker-item"
+                                  onClick={() => {
+                                    setMessage((m) => m + emoji);
+                                    handleTyping();
+                                  }}
+                                >
+                                  {emoji}
+                                </button>
+                              ))}
+                              <button type="button" className="emoji-picker-close" onClick={() => setShowEmojiPicker(false)}>✕</button>
+                            </div>
+                          )}
+                          <form className="input-area" onSubmit={sendMessage}>
+                            <input
+                              type="text"
+                              placeholder="Type a message..."
+                              value={message}
+                              onChange={(e) => {
+                                setMessage(e.target.value);
+                                handleTyping();
+                              }}
+                            />
+                            <button type="button" className="emoji-trigger-btn" onClick={() => setShowEmojiPicker((v) => !v)} title="Insert emoji">
+                              😺
+                            </button>
+                            <button type="button" className="meow-btn" onClick={handleMeow} title="Send a Meow!">
+                              <img src={getCatUrl('meow')} alt="Meow" />
+                            </button>
+                            <button type="submit" className="send-btn"><span className="send-icon">🐾</span></button>
+                            {roomId && (
+                              <button type="button" className="exit-room-btn" onClick={handleLeaveRoom} title="Leave Room">
+                                <span className="exit-icon">🚪🏃</span>
+                              </button>
+                            )}
+                          </form>
+                          {showMeowAnim && (
+                            <div className="meow-storm-overlay">
+                              {meowStormItems.map((item, i) => (
+                                <div key={i} className="storm-item" style={{
+                                  left: `${item.left}%`,
+                                  animationDelay: `${item.delay}s`,
+                                  fontSize: `${item.fontSize}rem`
+                                }}>
+                                  {item.emoji}
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </>
+                    ) : (
+                      <div className="waiting-screen">
+                        <div className="lottie-container">
+                          <DotLottieReact
+                            src="https://lottie.host/66c26512-b761-4419-82d7-07d8f285a60a/OYJBZAfJEY.lottie"
+                            loop autoplay
+                          />
+                        </div>
+                        <p className="animated-waiting">
+                          {roomId ? (
+                            roomCreator === profile.name
+                              ? `Waiting for friends in ${roomName || 'your room'}...`
+                              : `Letting in to ${roomCreator || 'the'}'s room`
+                          ) : 'Finding your pair...'}
                         </p>
                       </div>
                     )}
                   </div>
                 </div>
-
-                {status === 'connected' ? (
-                  <>
-                    <div className="messages-box">
-                      {chat.map((msg, index) => (
-                        msg.isSystem ? (
-                          <div key={index} className="system-message">
-                            <p>{msg.message}</p>
-                          </div>
-                        ) : (
-                          <div
-                            key={index}
-                            className={`message-row ${msg.isMe ? 'my-row' : 'stranger-row'} ${swipeData.id === index ? 'swiping-active' : ''} ${swipeData.id === index && swipeData.offset >= 0 ? 'swipe-direction-right' : ''} ${swipeData.id === index && swipeData.offset < 0 ? 'swipe-direction-left' : ''}`}
-                            style={{
-                              transform: swipeData.id === index ? `translateX(${swipeData.offset}px)` : 'none'
-                            }}
-                            title="Swipe or drag left/right to reply"
-                            onTouchStart={(e) => handleSwipeStart(e, index, msg)}
-                            onTouchMove={handleSwipeMove}
-                            onTouchEnd={() => handleSwipeEnd(msg)}
-                            onMouseDown={(e) => handleSwipeStart(e, index, msg)}
-                            onMouseMove={handleSwipeMove}
-                            onMouseUp={() => handleSwipeEnd(msg)}
-                          >
-                            <div className="swipe-indicator swipe-indicator-left" aria-hidden>🐾 Reply</div>
-                            <div className="swipe-indicator swipe-indicator-right" aria-hidden>Reply 🐾</div>
-                            <div className="avatar">
-                              <img src={getCatUrl(msg.isMe ? profile.avatarSeed : (msg.sender?.avatarSeed || partner?.avatarSeed))} alt="p" />
-                            </div>
-                            <div className={`message-bubble ${msg.isMe ? 'my-message' : 'stranger-message'}`}>
-                              {!msg.isMe && (roomId || msg.sender) && (
-                                <div className="sender-name">{msg.sender?.name || partner?.name || 'Stranger'}</div>
-                              )}
-
-                              {msg.replyTo && (
-                                <div className="quoted-message">
-                                  <span className="quoted-name">{msg.replyTo.name}</span>
-                                  <div className="quoted-text">{msg.replyTo.text}</div>
-                                </div>
-                              )}
-
-                              <div className="message-text">{msg.message}</div>
-                              <div className="message-meta-row">
-                                <span className="message-time">{formatTime(msg.timestamp)}</span>
-                                {msg.isMe && msg.delivered && <span className="message-receipt" title="Delivered">✓</span>}
-                              </div>
-                            </div>
-                          </div>
-                        )
-                      ))}
-                      {isPartnerTyping && (
-                        <div className="typing-indicator">
-                          <span className="typing-paw">🐾</span>
-                          <span>{partner?.name || 'Someone'} is typing...</span>
-                        </div>
-                      )}
-                      <div ref={messagesEndRef} />
-                    </div>
-
-                    <div className="chat-controls-area">
-                      {replyingTo && (
-                        <div className="reply-preview-container">
-                          <div className="reply-preview-content">
-                            <span className="reply-preview-name">Replying to {replyingTo.name}</span>
-                            <div className="reply-preview-text">{replyingTo.text}</div>
-                          </div>
-                          <button className="cancel-reply-btn" onClick={() => setReplyingTo(null)}>✕</button>
-                        </div>
-                      )}
-                      {status === 'connected' && !roomId && (
-                        <div className="next-cat-container">
-                          <button className="next-cat-btn-glass" onClick={handleSkip}>
-                            Next Cat 🐾
-                          </button>
-                        </div>
-                      )}
-                      {showEmojiPicker && (
-                        <div className="emoji-picker-panel">
-                          {EMOJI_PICKER_LIST.map((emoji, i) => (
-                            <button
-                              key={i}
-                              type="button"
-                              className="emoji-picker-item"
-                              onClick={() => {
-                                setMessage((m) => m + emoji);
-                                handleTyping();
-                              }}
-                            >
-                              {emoji}
-                            </button>
-                          ))}
-                          <button type="button" className="emoji-picker-close" onClick={() => setShowEmojiPicker(false)}>✕</button>
-                        </div>
-                      )}
-                      <form className="input-area" onSubmit={sendMessage}>
-                        <input
-                          type="text"
-                          placeholder="Type a message..."
-                          value={message}
-                          onChange={(e) => {
-                            setMessage(e.target.value);
-                            handleTyping();
-                          }}
-                        />
-                        <button type="button" className="emoji-trigger-btn" onClick={() => setShowEmojiPicker((v) => !v)} title="Insert emoji">
-                          😺
-                        </button>
-                        <button type="button" className="meow-btn" onClick={handleMeow} title="Send a Meow!">
-                          <img src="https://robohash.org/premium-meow.png?set=set4&size=100x100" alt="Meow" />
-                        </button>
-                        <button type="submit" className="send-btn"><span className="send-icon">🐾</span></button>
-                        {roomId && (
-                          <button type="button" className="exit-room-btn" onClick={handleLeaveRoom} title="Leave Room">
-                            <span className="exit-icon">🚪🏃</span>
-                          </button>
-                        )}
-                      </form>
-                      {showMeowAnim && (
-                        <div className="meow-storm-overlay">
-                          {meowStormItems.map((item, i) => (
-                            <div key={i} className="storm-item" style={{
-                              left: `${item.left}%`,
-                              animationDelay: `${item.delay}s`,
-                              fontSize: `${item.fontSize}rem`
-                            }}>
-                              {item.emoji}
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  </>
-                ) : (
-                  <div className="waiting-screen">
-                    <div className="lottie-container">
-                      <DotLottieReact
-                        src="https://lottie.host/66c26512-b761-4419-82d7-07d8f285a60a/OYJBZAfJEY.lottie"
-                        loop autoplay
-                      />
-                    </div>
-                    <p className="animated-waiting">
-                      {roomId ? (
-                        roomCreator === profile.name
-                          ? `Waiting for friends in ${roomName || 'your room'}...`
-                          : `Letting in to ${roomCreator || 'the'}'s room`
-                      ) : 'Finding your pair...'}
-                    </p>
-                  </div>
-                )}
-              </div>
-            </div>
+              )}
+            </>
           )}
         </main>
       </div>
