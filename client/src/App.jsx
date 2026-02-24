@@ -36,6 +36,7 @@ function App() {
   const [isMuted, setIsMuted] = useState(false);
   const [messageSoundOn, setMessageSoundOn] = useState(true);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [showOptionsMenu, setShowOptionsMenu] = useState(false);
 
   // Chat State
   const [message, setMessage] = useState('');
@@ -148,7 +149,7 @@ function App() {
         socketRef.current?.emit('message_delivered', { messageId: data.messageId, senderSocketId: data.senderSocketId });
       }
       if (messageSoundOnRef.current && !data.isSystem) {
-        messageSoundRef.current?.play().catch(() => {});
+        messageSoundRef.current?.play().catch(() => { });
       }
     });
 
@@ -309,7 +310,7 @@ function App() {
       navigator.clipboard.writeText(roomId).then(() => {
         setCopyFeedback(true);
         setTimeout(() => setCopyFeedback(false), 2000);
-      }).catch(() => {});
+      }).catch(() => { });
     }
   };
 
@@ -769,6 +770,34 @@ function App() {
                             <>Chatting with <strong>{partner?.name || 'Stranger'}</strong></>
                           )}
                         </p>
+                        {/* 3-dot menu — only in private rooms */}
+                        {roomId && (
+                          <div className="partner-options-wrap">
+                            <button
+                              className="partner-options-btn"
+                              onClick={() => setShowOptionsMenu((v) => !v)}
+                              title="More options"
+                            >
+                              <span>⋮</span>
+                            </button>
+                            {showOptionsMenu && (
+                              <div className="partner-options-dropdown">
+                                <button onClick={() => { copyRoomCode(); setShowOptionsMenu(false); }}>
+                                  📋 Copy Room Code
+                                </button>
+                                <button onClick={() => { setIsMuted((m) => !m); setShowOptionsMenu(false); }}>
+                                  {isMuted ? '🔔 Unmute' : '🔕 Mute'}
+                                </button>
+                                <button className="options-report" onClick={() => { alert('Report feature coming soon 🐾'); setShowOptionsMenu(false); }}>
+                                  🚨 Report
+                                </button>
+                                <button className="options-leave" onClick={() => { setShowOptionsMenu(false); handleLeaveRoom(); }}>
+                                  🚪 Leave Room
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
