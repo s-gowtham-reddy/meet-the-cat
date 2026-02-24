@@ -382,7 +382,6 @@ io.on('connection', (socket) => {
         }
     });
 
-
     socket.on('typing', (data) => {
         if (!checkSocketRateLimit(socket.id, 'typing')) return;
         const roomId = data?.roomId;

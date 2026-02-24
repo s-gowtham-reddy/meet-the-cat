@@ -6,20 +6,20 @@ import './index.css'
 const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:3001';
 const AVATAR_SEEDS = ['Felix', 'Whiskers', 'Garfield', 'Tom', 'Luna', 'Mittens', 'Simba', 'Nala'];
 
-// Cat-themed sticker set using cataas.com GIFs — no API key required
+// Cat-themed sticker set using stable cataas.com GIF IDs to ensure synchronization
 const STICKER_LIST = [
-  'https://cataas.com/cat/gif?width=120&height=120&seed=s1',
-  'https://cataas.com/cat/gif?width=120&height=120&seed=s2',
-  'https://cataas.com/cat/gif?width=120&height=120&seed=s3',
-  'https://cataas.com/cat/gif?width=120&height=120&seed=s4',
-  'https://cataas.com/cat/gif?width=120&height=120&seed=s5',
-  'https://cataas.com/cat/gif?width=120&height=120&seed=s6',
-  'https://cataas.com/cat/gif?width=120&height=120&seed=s7',
-  'https://cataas.com/cat/gif?width=120&height=120&seed=s8',
-  'https://cataas.com/cat/gif?width=120&height=120&seed=s9',
-  'https://cataas.com/cat/gif?width=120&height=120&seed=s10',
-  'https://cataas.com/cat/gif?width=120&height=120&seed=s11',
-  'https://cataas.com/cat/gif?width=120&height=120&seed=s12',
+  'https://cataas.com/cat/1ozkXaGbz1CriQiG',
+  'https://cataas.com/cat/1RFXsaXoyCZdplFx',
+  'https://cataas.com/cat/1ZfGU7z1uIdnehgj',
+  'https://cataas.com/cat/2T7yPn3J5qz54Ygy',
+  'https://cataas.com/cat/2tKejk7oauPg3Yt4',
+  'https://cataas.com/cat/38lyiUi0Hv9MzKwW',
+  'https://cataas.com/cat/3mEJCz1Oj7l1E2tm',
+  'https://cataas.com/cat/3prWPtfRjrBXs9M7',
+  'https://cataas.com/cat/3Z6CcYkHotdUXQC9',
+  'https://cataas.com/cat/48xLBZGSXgxZRMAB',
+  'https://cataas.com/cat/5a3YH3bjZJWlsZ95',
+  'https://cataas.com/cat/5HiPQ6HEHv1fQwPZ',
 ];
 
 function App() {
@@ -382,13 +382,21 @@ function App() {
     }
   };
 
-  const sendMessage = (e) => {
-    e.preventDefault();
-    if (!message.trim() || status !== 'connected' || !socketRef.current?.connected) return;
+  const getMessageSummary = (text) => {
+    if (!text) return '';
+    if (text.startsWith('[sticker:')) return '🐾 Sticker';
+    return text;
+  };
+
+  const performSend = (textOverride) => {
+    const textToSend = textOverride !== undefined ? textOverride : message;
+    if (!textToSend.trim() || status !== 'connected' || !socketRef.current?.connected) return;
+
     const messageId = `msg_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
     const timestamp = new Date().toISOString();
+
     const msgData = {
-      message,
+      message: textToSend,
       isMe: true,
       timestamp,
       userId: profile.userId,
@@ -397,16 +405,22 @@ function App() {
     };
 
     socketRef.current?.emit('send_message', {
-      message,
+      message: textToSend,
       roomId,
       profile,
       replyTo: replyingTo,
       messageId
     });
+
     socketRef.current?.emit('stop_typing', { roomId });
     setChat((prev) => [...prev, msgData]);
-    setMessage('');
+    if (textOverride === undefined) setMessage('');
     setReplyingTo(null);
+  };
+
+  const sendMessage = (e) => {
+    e.preventDefault();
+    performSend();
   };
 
   const handleLeaveRoom = () => {
@@ -848,7 +862,7 @@ function App() {
                                   {msg.replyTo && (
                                     <div className="quoted-message">
                                       <span className="quoted-name">{msg.replyTo.name}</span>
-                                      <div className="quoted-text">{msg.replyTo.text}</div>
+                                      <div className="quoted-text">{getMessageSummary(msg.replyTo.text)}</div>
                                     </div>
                                   )}
 
@@ -884,7 +898,7 @@ function App() {
                             <div className="reply-preview-container">
                               <div className="reply-preview-content">
                                 <span className="reply-preview-name">Replying to {replyingTo.name}</span>
-                                <div className="reply-preview-text">{replyingTo.text}</div>
+                                <div className="reply-preview-text">{getMessageSummary(replyingTo.text)}</div>
                               </div>
                               <button className="cancel-reply-btn" onClick={() => setReplyingTo(null)}>✕</button>
                             </div>
@@ -909,7 +923,7 @@ function App() {
                                     type="button"
                                     className="sticker-item"
                                     onClick={() => {
-                                      setMessage(`[sticker:${url}]`);
+                                      performSend(`[sticker:${url}]`);
                                       setShowStickerPicker(false);
                                     }}
                                   >
