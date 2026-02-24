@@ -6,7 +6,22 @@ import './index.css'
 const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:3001';
 const AVATAR_SEEDS = ['Felix', 'Whiskers', 'Garfield', 'Tom', 'Luna', 'Mittens', 'Simba', 'Nala'];
 const MEOW_EMOJIS = ['MEOW! 🐾', '🐾', '🐱', '🐱‍👤', '✨'];
-const EMOJI_PICKER_LIST = ['😺', '😸', '😻', '🐱', '🐈', '🙀', '😽', '😼', '👍', '❤️', '😂', '😊', '🎉', '🔥', '✨', '🐾', '👋', '💬', '⭐', '💯'];
+
+// Cat-themed sticker set using cataas.com GIFs — no API key required
+const STICKER_LIST = [
+  'https://cataas.com/cat/gif?width=120&height=120&seed=s1',
+  'https://cataas.com/cat/gif?width=120&height=120&seed=s2',
+  'https://cataas.com/cat/gif?width=120&height=120&seed=s3',
+  'https://cataas.com/cat/gif?width=120&height=120&seed=s4',
+  'https://cataas.com/cat/gif?width=120&height=120&seed=s5',
+  'https://cataas.com/cat/gif?width=120&height=120&seed=s6',
+  'https://cataas.com/cat/gif?width=120&height=120&seed=s7',
+  'https://cataas.com/cat/gif?width=120&height=120&seed=s8',
+  'https://cataas.com/cat/gif?width=120&height=120&seed=s9',
+  'https://cataas.com/cat/gif?width=120&height=120&seed=s10',
+  'https://cataas.com/cat/gif?width=120&height=120&seed=s11',
+  'https://cataas.com/cat/gif?width=120&height=120&seed=s12',
+];
 
 function App() {
   // Simplified Onboarding State
@@ -35,7 +50,7 @@ function App() {
   const [theme, setTheme] = useState('light'); // light, dark, pink
   const [isMuted, setIsMuted] = useState(false);
   const [messageSoundOn, setMessageSoundOn] = useState(true);
-  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [showStickerPicker, setShowStickerPicker] = useState(false);
 
   // Chat State
   const [message, setMessage] = useState('');
@@ -245,7 +260,6 @@ function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional: run once on mount only
   }, []);
 
-
   const meowStormItems = useMemo(() => {
     if (!showMeowAnim) return [];
     return Array.from({ length: 15 }, () => ({
@@ -450,7 +464,8 @@ function App() {
     window.history.pushState({}, '', window.location.pathname);
   };
 
-  const getCatUrl = (seed) => `https://cataas.com/cat?seed=${encodeURIComponent(seed)}&width=200&height=200`;
+  // Real cat photos via cataas.com — consistent per seed, no API key required
+  const getCatUrl = (seed) => `https://cataas.com/cat?seed=${encodeURIComponent(seed || 'default')}&width=200&height=200`;
 
   const formatTime = (timestamp) => {
     if (!timestamp) return '';
@@ -587,7 +602,7 @@ function App() {
                         disabled={!!roomId}
                         title="Create or Join Private Chat Room"
                       >
-                        <img src="https://robohash.org/premium-room-cat.png?set=set4&size=150x150" className="room-btn-img" alt="Cat Room" />
+                        <img src={getCatUrl('room-btn')} className="room-btn-img" alt="Cat Room" />
                       </button>
                     </div>
                     <div className="scroll-hint">
@@ -853,7 +868,16 @@ function App() {
                                     </div>
                                   )}
 
-                                  <div className="message-text">{msg.message}</div>
+                                  <div className="message-text">
+                                    {msg.message?.startsWith('[sticker:') ? (
+                                      <img
+                                        src={msg.message.slice(9, -1)}
+                                        alt="Cat sticker"
+                                        className="chat-sticker-img"
+                                        loading="lazy"
+                                      />
+                                    ) : msg.message}
+                                  </div>
                                   <div className="message-meta-row">
                                     <span className="message-time">{formatTime(msg.timestamp)}</span>
                                     {msg.isMe && msg.delivered && <span className="message-receipt" title="Delivered">✓</span>}
@@ -888,22 +912,27 @@ function App() {
                               </button>
                             </div>
                           )}
-                          {showEmojiPicker && (
-                            <div className="emoji-picker-panel">
-                              {EMOJI_PICKER_LIST.map((emoji, i) => (
-                                <button
-                                  key={i}
-                                  type="button"
-                                  className="emoji-picker-item"
-                                  onClick={() => {
-                                    setMessage((m) => m + emoji);
-                                    handleTyping();
-                                  }}
-                                >
-                                  {emoji}
-                                </button>
-                              ))}
-                              <button type="button" className="emoji-picker-close" onClick={() => setShowEmojiPicker(false)}>✕</button>
+                          {showStickerPicker && (
+                            <div className="sticker-picker-panel">
+                              <div className="sticker-picker-header">
+                                <span>🐾 Cat Stickers</span>
+                                <button type="button" className="sticker-picker-close" onClick={() => setShowStickerPicker(false)}>✕</button>
+                              </div>
+                              <div className="sticker-grid">
+                                {STICKER_LIST.map((url, i) => (
+                                  <button
+                                    key={i}
+                                    type="button"
+                                    className="sticker-item"
+                                    onClick={() => {
+                                      setMessage(`[sticker:${url}]`);
+                                      setShowStickerPicker(false);
+                                    }}
+                                  >
+                                    <img src={url} alt={`Cat sticker ${i + 1}`} loading="lazy" />
+                                  </button>
+                                ))}
+                              </div>
                             </div>
                           )}
                           <form className="input-area" onSubmit={sendMessage}>
@@ -916,8 +945,8 @@ function App() {
                                 handleTyping();
                               }}
                             />
-                            <button type="button" className="emoji-trigger-btn" onClick={() => setShowEmojiPicker((v) => !v)} title="Insert emoji">
-                              😺
+                            <button type="button" className="sticker-trigger-btn" onClick={() => setShowStickerPicker((v) => !v)} title="Send a cat sticker">
+                              🎨
                             </button>
                             <button type="button" className="meow-btn" onClick={handleMeow} title="Send a Meow!">
                               <img src={getCatUrl('meow')} alt="Meow" />
@@ -925,7 +954,11 @@ function App() {
                             <button type="submit" className="send-btn"><span className="send-icon">🐾</span></button>
                             {roomId && (
                               <button type="button" className="exit-room-btn" onClick={handleLeaveRoom} title="Leave Room">
-                                <span className="exit-icon">🚪🏃</span>
+                                <svg className="exit-door-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                  <path d="M13 4H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h7" />
+                                  <polyline points="17 8 21 12 17 16" />
+                                  <line x1="21" y1="12" x2="9" y2="12" />
+                                </svg>
                               </button>
                             )}
                           </form>
