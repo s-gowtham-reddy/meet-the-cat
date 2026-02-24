@@ -5,7 +5,6 @@ import './index.css'
 
 const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:3001';
 const AVATAR_SEEDS = ['Felix', 'Whiskers', 'Garfield', 'Tom', 'Luna', 'Mittens', 'Simba', 'Nala'];
-const MEOW_EMOJIS = ['MEOW! 🐾', '🐾', '🐱', '🐱‍👤', '✨'];
 
 // Cat-themed sticker set using cataas.com GIFs — no API key required
 const STICKER_LIST = [
@@ -48,7 +47,6 @@ function App() {
   const [roomUserCount, setRoomUserCount] = useState(0);
   const [, setIsConnected] = useState(false);
   const [theme, setTheme] = useState('light'); // light, dark, pink
-  const [isMuted, setIsMuted] = useState(false);
   const [messageSoundOn, setMessageSoundOn] = useState(true);
   const [showStickerPicker, setShowStickerPicker] = useState(false);
   const [showOptionsMenu, setShowOptionsMenu] = useState(false);
@@ -60,7 +58,6 @@ function App() {
   const [status, setStatus] = useState('idle'); // idle, waiting, connected
   const [partner, setPartner] = useState(null); // { name, avatarSeed }
   const [isPartnerTyping, setIsPartnerTyping] = useState(false);
-  const [showMeowAnim, setShowMeowAnim] = useState(false);
   const [roomId, setRoomId] = useState(null);
   const [roomName, setRoomName] = useState('');
   const [roomCreator, setRoomCreator] = useState('');
@@ -73,27 +70,7 @@ function App() {
   const socketRef = useRef(null);
   const typingTimeoutRef = useRef(null);
   const messagesEndRef = useRef(null);
-  const meowAudioRef = useRef(new Audio('https://www.myinstants.com/media/sounds/meow_1.mp3'));
   const messageSoundRef = useRef(null);
-  if (!messageSoundRef.current) {
-    messageSoundRef.current = new Audio('https://assets.mixkit.co/active_storage/sfx/2560-message-pop-alert.mp3');
-  }
-  const dragRef = useRef({ startX: 0, msg: null, lastOffset: 0 });
-  const swipeCleanupRef = useRef(null);
-  const triggerMeowStormRef = useRef(null);
-
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  };
-
-  const triggerMeowStorm = () => {
-    setShowMeowAnim(true);
-    setTimeout(() => setShowMeowAnim(false), 2500);
-  };
-
-  useEffect(() => {
-    triggerMeowStormRef.current = triggerMeowStorm;
-  });
 
   useEffect(() => {
     scrollToBottom();
@@ -176,10 +153,6 @@ function App() {
       }
     });
 
-    socket.on('partner_meow', () => {
-      triggerMeowStormRef.current?.();
-      if (!isMuted) meowAudioRef.current.play().catch(() => { });
-    });
 
     socket.on('partner_typing', () => setIsPartnerTyping(true));
     socket.on('partner_stop_typing', () => setIsPartnerTyping(false));
@@ -262,15 +235,6 @@ function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional: run once on mount only
   }, []);
 
-  const meowStormItems = useMemo(() => {
-    if (!showMeowAnim) return [];
-    return Array.from({ length: 15 }, () => ({
-      left: Math.random() * 100,
-      delay: Math.random() * 0.5,
-      fontSize: 1 + Math.random() * 2,
-      emoji: MEOW_EMOJIS[Math.floor(Math.random() * MEOW_EMOJIS.length)]
-    }));
-  }, [showMeowAnim]);
 
   const handleJoinQueue = () => {
     if (step === 0) setStep(1);
@@ -329,11 +293,6 @@ function App() {
     }
   };
 
-  const handleMeow = () => {
-    socketRef.current?.emit('meow', { roomId });
-    triggerMeowStorm();
-    if (!isMuted) meowAudioRef.current.play().catch(() => { });
-  };
 
   const handleTyping = () => {
     socketRef.current?.emit('typing', { roomId });
@@ -516,12 +475,6 @@ function App() {
             <div className="header-actions">
               <button onClick={toggleTheme} className="theme-toggle-btn" title="Change Theme">
                 <span className="cat-icon-theme">✨😺</span>
-              </button>
-              <button onClick={() => setIsMuted(!isMuted)} className="mute-toggle-btn" title="Meow sound">
-                {isMuted ? '🔕' : '🔔'}
-              </button>
-              <button onClick={() => setMessageSoundOn(!messageSoundOn)} className="mute-toggle-btn" title="New message sound">
-                {messageSoundOn ? '💬' : '🔇'}
               </button>
             </div>
           </div>
@@ -840,9 +793,6 @@ function App() {
                                     <button onClick={() => { copyRoomCode(); setShowOptionsMenu(false); }}>
                                       📋 Copy Room Code
                                     </button>
-                                    <button onClick={() => { setIsMuted((m) => !m); setShowOptionsMenu(false); }}>
-                                      {isMuted ? '🔔 Unmute' : '🔕 Mute'}
-                                    </button>
                                     <button className="options-report" onClick={() => { alert('Report feature coming soon 🐾'); setShowOptionsMenu(false); }}>
                                       🚨 Report
                                     </button>
@@ -978,9 +928,6 @@ function App() {
                             <button type="button" className="sticker-trigger-btn" onClick={() => setShowStickerPicker((v) => !v)} title="Send a cat sticker">
                               🎨
                             </button>
-                            <button type="button" className="meow-btn" onClick={handleMeow} title="Send a Meow!">
-                              <img src={getCatUrl('meow')} alt="Meow" />
-                            </button>
                             <button type="submit" className="send-btn"><span className="send-icon">🐾</span></button>
                             {roomId && (
                               <button type="button" className="exit-room-btn" onClick={handleLeaveRoom} title="Leave Room">
@@ -992,19 +939,6 @@ function App() {
                               </button>
                             )}
                           </form>
-                          {showMeowAnim && (
-                            <div className="meow-storm-overlay">
-                              {meowStormItems.map((item, i) => (
-                                <div key={i} className="storm-item" style={{
-                                  left: `${item.left}%`,
-                                  animationDelay: `${item.delay}s`,
-                                  fontSize: `${item.fontSize}rem`
-                                }}>
-                                  {item.emoji}
-                                </div>
-                              ))}
-                            </div>
-                          )}
                         </div>
                       </>
                     ) : (
@@ -1036,9 +970,6 @@ function App() {
                               <div className="partner-options-dropdown">
                                 <button onClick={() => { copyRoomCode(); setShowOptionsMenu(false); }}>
                                   📋 Copy Room Code
-                                </button>
-                                <button onClick={() => { setIsMuted((m) => !m); setShowOptionsMenu(false); }}>
-                                  {isMuted ? '🔔 Unmute' : '🔕 Mute'}
                                 </button>
                                 <button className="options-report" onClick={() => { alert('Report feature coming soon 🐾'); setShowOptionsMenu(false); }}>
                                   🚨 Report
@@ -1098,8 +1029,8 @@ function App() {
                 </div>
 
                 <div className="profile-actions-grid">
-                  <button className="profile-cta-btn primary-btn" onClick={() => { handleMeow(); setShowProfileCard(false); }}>
-                    Meow Back 🐾
+                  <button className="profile-cta-btn primary-btn" onClick={() => setShowProfileCard(false)}>
+                    Close 🐾
                   </button>
                   <div className="secondary-actions-row">
                     <button className="profile-ghost-btn" onClick={() => alert('Future feature: View Secret Identity 🕵️')}>

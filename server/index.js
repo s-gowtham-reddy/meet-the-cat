@@ -80,7 +80,6 @@ let usedCodes = new Map(); // roomId -> expiry timestamp
 // Socket event rate limits: max events per minute per socket
 const SOCKET_RATE_LIMITS = {
     send_message: 60,
-    meow: 30,
     join_queue: 10,
     create_room: 10,
     join_private_room: 15,
@@ -163,7 +162,7 @@ function getLocation(socket) {
     const clientIp = requestIp.getClientIp(socket.request);
     // Handle local development (localhost)
     if (clientIp === '::1' || clientIp === '127.0.0.1' || !clientIp) {
-        return 'Local Meow';
+        return 'Local Chat';
     }
     const geo = geoip.lookup(clientIp);
     if (geo) {
@@ -383,18 +382,6 @@ io.on('connection', (socket) => {
         }
     });
 
-    socket.on('meow', (data) => {
-        if (!checkSocketRateLimit(socket.id, 'meow')) return;
-        const roomId = data?.roomId;
-        if (roomId) {
-            socket.to(roomId).emit('partner_meow');
-        } else {
-            const partnerId = pairs[socket.id];
-            if (partnerId) {
-                io.to(partnerId).emit('partner_meow');
-            }
-        }
-    });
 
     socket.on('typing', (data) => {
         if (!checkSocketRateLimit(socket.id, 'typing')) return;
