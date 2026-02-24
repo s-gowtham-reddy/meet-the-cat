@@ -470,9 +470,6 @@ function App() {
                   <span className="count-label">Room Code:</span>
                   <span className="count-value code-accent">{roomId}</span>
                 </div>
-                <button type="button" className="copy-room-btn" onClick={copyRoomCode} title="Copy Room Code">
-                  {copyFeedback ? '✓ Copied!' : '📋 Copy'}
-                </button>
               </div>
             )}
             <div className="status-item online-cats-pill">
@@ -772,9 +769,6 @@ function App() {
                                   <span className="code-label">CODE:</span>
                                   <span className="code-value">{roomId}</span>
                                 </div>
-                                <button type="button" className="copy-room-btn-inline" onClick={copyRoomCode}>
-                                  {copyFeedback ? '✓ Copied!' : '📋 Copy Room Code'}
-                                </button>
                               </div>
                             )}
                           </div>
