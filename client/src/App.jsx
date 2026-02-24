@@ -5,8 +5,21 @@ import './index.css'
 
 const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:3001';
 const AVATAR_SEEDS = ['Felix', 'Whiskers', 'Garfield', 'Tom', 'Luna', 'Mittens', 'Simba', 'Nala'];
-const MEOW_EMOJIS = ['MEOW! 🐾', '🐾', '🐱', '🐱‍👤', '✨'];
-const EMOJI_PICKER_LIST = ['😺', '😸', '😻', '🐱', '🐈', '🙀', '😽', '😼', '👍', '❤️', '😂', '😊', '🎉', '🔥', '✨', '🐾', '👋', '💬', '⭐', '💯'];
+// Cat-themed sticker set using cataas.com GIFs — no API key required
+const STICKER_LIST = [
+  'https://cataas.com/cat/gif?width=120&height=120&seed=s1',
+  'https://cataas.com/cat/gif?width=120&height=120&seed=s2',
+  'https://cataas.com/cat/gif?width=120&height=120&seed=s3',
+  'https://cataas.com/cat/gif?width=120&height=120&seed=s4',
+  'https://cataas.com/cat/gif?width=120&height=120&seed=s5',
+  'https://cataas.com/cat/gif?width=120&height=120&seed=s6',
+  'https://cataas.com/cat/gif?width=120&height=120&seed=s7',
+  'https://cataas.com/cat/gif?width=120&height=120&seed=s8',
+  'https://cataas.com/cat/gif?width=120&height=120&seed=s9',
+  'https://cataas.com/cat/gif?width=120&height=120&seed=s10',
+  'https://cataas.com/cat/gif?width=120&height=120&seed=s11',
+  'https://cataas.com/cat/gif?width=120&height=120&seed=s12',
+];
 
 function App() {
   // Simplified Onboarding State
@@ -35,7 +48,7 @@ function App() {
   const [theme, setTheme] = useState('light'); // light, dark, pink
   const [isMuted, setIsMuted] = useState(false);
   const [messageSoundOn, setMessageSoundOn] = useState(true);
-  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [showStickerPicker, setShowStickerPicker] = useState(false);
 
   // Chat State
   const [message, setMessage] = useState('');
@@ -56,7 +69,7 @@ function App() {
   const socketRef = useRef(null);
   const typingTimeoutRef = useRef(null);
   const messagesEndRef = useRef(null);
-  const meowAudioRef = useRef(new Audio('https://www.myinstants.com/media/sounds/meow_1.mp3'));
+  // const meowAudioRef = useRef(new Audio('https://www.myinstants.com/media/sounds/meow_1.mp3'));
   const messageSoundRef = useRef(null);
   if (!messageSoundRef.current) {
     messageSoundRef.current = new Audio('https://assets.mixkit.co/active_storage/sfx/2560-message-pop-alert.mp3');
@@ -148,7 +161,7 @@ function App() {
         socketRef.current?.emit('message_delivered', { messageId: data.messageId, senderSocketId: data.senderSocketId });
       }
       if (messageSoundOnRef.current && !data.isSystem) {
-        messageSoundRef.current?.play().catch(() => {});
+        messageSoundRef.current?.play().catch(() => { });
       }
     });
 
@@ -309,7 +322,7 @@ function App() {
       navigator.clipboard.writeText(roomId).then(() => {
         setCopyFeedback(true);
         setTimeout(() => setCopyFeedback(false), 2000);
-      }).catch(() => {});
+      }).catch(() => { });
     }
   };
 
@@ -450,7 +463,8 @@ function App() {
     window.history.pushState({}, '', window.location.pathname);
   };
 
-  const getCatUrl = (seed) => `https://robohash.org/${seed}.png?set=set4&size=400x400`;
+  // Real cat photos via cataas.com — consistent per seed, no API key required
+  const getCatUrl = (seed) => `https://cataas.com/cat?seed=${encodeURIComponent(seed || 'default')}&width=200&height=200`;
 
   const formatTime = (timestamp) => {
     if (!timestamp) return '';
@@ -746,16 +760,13 @@ function App() {
                   <div className="chat-info">
                     {status === 'waiting' ? (
                       <div className="waiting-info">
-                        <p className="waiting-text">{roomId ? `Waiting for friends in ${roomName || 'Private Room'}...` : `Searching for a match for ${profile.name}...`}</p>
+                        <p className="waiting-text">{roomId ? `Waiting for friends in ${roomName || 'Private Room'}...` : `Searching a match for ${profile.name}...`}</p>
                         {roomId && (
                           <div className="room-code-display-wrap">
                             <div className="room-code-display" onClick={copyRoomCode} title="Click to copy">
                               <span className="code-label">CODE:</span>
                               <span className="code-value">{roomId}</span>
                             </div>
-                            <button type="button" className="copy-room-btn-inline" onClick={copyRoomCode}>
-                              {copyFeedback ? '✓ Copied!' : '📋 Copy Room Code'}
-                            </button>
                           </div>
                         )}
                       </div>
@@ -814,7 +825,16 @@ function App() {
                                 </div>
                               )}
 
-                              <div className="message-text">{msg.message}</div>
+                              <div className="message-text">
+                                {msg.message?.startsWith('[sticker:') ? (
+                                  <img
+                                    src={msg.message.slice(9, -1)}
+                                    alt="Cat sticker"
+                                    className="chat-sticker-img"
+                                    loading="lazy"
+                                  />
+                                ) : msg.message}
+                              </div>
                               <div className="message-meta-row">
                                 <span className="message-time">{formatTime(msg.timestamp)}</span>
                                 {msg.isMe && msg.delivered && <span className="message-receipt" title="Delivered">✓</span>}
@@ -849,22 +869,27 @@ function App() {
                           </button>
                         </div>
                       )}
-                      {showEmojiPicker && (
-                        <div className="emoji-picker-panel">
-                          {EMOJI_PICKER_LIST.map((emoji, i) => (
-                            <button
-                              key={i}
-                              type="button"
-                              className="emoji-picker-item"
-                              onClick={() => {
-                                setMessage((m) => m + emoji);
-                                handleTyping();
-                              }}
-                            >
-                              {emoji}
-                            </button>
-                          ))}
-                          <button type="button" className="emoji-picker-close" onClick={() => setShowEmojiPicker(false)}>✕</button>
+                      {showStickerPicker && (
+                        <div className="sticker-picker-panel">
+                          <div className="sticker-picker-header">
+                            <span>🐾 Cat Stickers</span>
+                            <button type="button" className="sticker-picker-close" onClick={() => setShowStickerPicker(false)}>✕</button>
+                          </div>
+                          <div className="sticker-grid">
+                            {STICKER_LIST.map((url, i) => (
+                              <button
+                                key={i}
+                                type="button"
+                                className="sticker-item"
+                                onClick={() => {
+                                  setMessage(`[sticker:${url}]`);
+                                  setShowStickerPicker(false);
+                                }}
+                              >
+                                <img src={url} alt={`Cat sticker ${i + 1}`} loading="lazy" />
+                              </button>
+                            ))}
+                          </div>
                         </div>
                       )}
                       <form className="input-area" onSubmit={sendMessage}>
@@ -877,16 +902,20 @@ function App() {
                             handleTyping();
                           }}
                         />
-                        <button type="button" className="emoji-trigger-btn" onClick={() => setShowEmojiPicker((v) => !v)} title="Insert emoji">
-                          😺
+                        <button type="button" className="sticker-trigger-btn" onClick={() => setShowStickerPicker((v) => !v)} title="Send a cat sticker">
+                          🎨
                         </button>
                         <button type="button" className="meow-btn" onClick={handleMeow} title="Send a Meow!">
-                          <img src="https://robohash.org/premium-meow.png?set=set4&size=100x100" alt="Meow" />
+                          <img src="https://cataas.com/cat?seed=meow-btn&width=60&height=60" alt="Meow" />
                         </button>
                         <button type="submit" className="send-btn"><span className="send-icon">🐾</span></button>
                         {roomId && (
                           <button type="button" className="exit-room-btn" onClick={handleLeaveRoom} title="Leave Room">
-                            <span className="exit-icon">🚪🏃</span>
+                            <svg className="exit-door-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M13 4H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h7" />
+                              <polyline points="17 8 21 12 17 16" />
+                              <line x1="21" y1="12" x2="9" y2="12" />
+                            </svg>
                           </button>
                         )}
                       </form>

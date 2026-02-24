@@ -711,13 +711,27 @@ body {
 }
 
 @keyframes typingPulse {
-  0%, 100% { opacity: 0.85; }
-  50% { opacity: 1; }
+
+  0%,
+  100% {
+    opacity: 0.85;
+  }
+
+  50% {
+    opacity: 1;
+  }
 }
 
 @keyframes typingBounce {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-3px); }
+
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+
+  50% {
+    transform: translateY(-3px);
+  }
 }
 
 /* Relocated Next Cat Glass Button */
@@ -783,63 +797,120 @@ body {
   transform: scale(0.95);
 }
 
-.emoji-picker-panel {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  padding: 10px 15px;
-  margin: 0 15px 8px;
-  background: var(--card-bg);
-  border-radius: 12px;
-  border: 1px solid var(--glass-border);
-  position: relative;
-  max-height: 120px;
-  overflow-y: auto;
-}
-
-.emoji-picker-item {
-  background: none;
-  border: none;
-  font-size: 1.4rem;
-  padding: 4px;
-  cursor: pointer;
-  border-radius: 6px;
-  transition: background 0.2s, transform 0.2s;
-}
-
-.emoji-picker-item:hover {
-  background: var(--bg-color);
-  transform: scale(1.15);
-}
-
-.emoji-picker-close {
+/* ===== Sticker Picker Tray ===== */
+.sticker-picker-panel {
   position: absolute;
-  top: 6px;
-  right: 8px;
-  background: rgba(0, 0, 0, 0.08);
+  bottom: 70px;
+  left: 15px;
+  right: 15px;
+  background: var(--card-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: 16px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
+  z-index: 50;
+  overflow: hidden;
+  animation: slideUpFade 0.2s ease;
+}
+
+@keyframes slideUpFade {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.sticker-picker-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 14px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-main);
+  border-bottom: 1px solid var(--glass-border);
+  background: var(--glass-bg);
+}
+
+.sticker-picker-close {
+  background: rgba(0, 0, 0, 0.07);
   border: none;
   width: 24px;
   height: 24px;
   border-radius: 50%;
   cursor: pointer;
   font-size: 0.8rem;
+  line-height: 1;
+  transition: background 0.2s;
 }
 
-.emoji-trigger-btn {
+.sticker-picker-close:hover {
+  background: var(--primary-color);
+  color: white;
+}
+
+.sticker-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+  padding: 10px 12px;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.sticker-item {
+  background: none;
+  border: 2px solid transparent;
+  border-radius: 10px;
+  cursor: pointer;
+  padding: 3px;
+  transition: border-color 0.15s, transform 0.15s;
+  overflow: hidden;
+}
+
+.sticker-item:hover {
+  border-color: var(--primary-color);
+  transform: scale(1.05);
+}
+
+.sticker-item img {
+  width: 100%;
+  height: 70px;
+  object-fit: cover;
+  border-radius: 7px;
+  display: block;
+}
+
+.sticker-trigger-btn {
   background: var(--glass-bg);
   border: 1px solid var(--glass-border);
   border-radius: 50%;
   width: 40px;
   height: 40px;
-  font-size: 1.2rem;
+  font-size: 1.1rem;
   cursor: pointer;
   flex-shrink: 0;
   transition: transform 0.2s, background 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
-.emoji-trigger-btn:hover {
+.sticker-trigger-btn:hover {
   background: var(--primary-color);
   transform: scale(1.05);
+}
+
+.chat-sticker-img {
+  width: 140px;
+  height: 140px;
+  object-fit: cover;
+  border-radius: 12px;
+  display: block;
 }
 
 .input-area {
@@ -1676,4 +1747,50 @@ body {
 
 .message-bubble.my-message .quoted-name {
   color: white;
+}
+
+/* ===== Exit Room Button (SVG Door) ===== */
+.exit-room-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 6px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  transition: background 0.2s, transform 0.2s;
+}
+
+.exit-room-btn:hover {
+  background: rgba(220, 53, 69, 0.1);
+  transform: scale(1.1);
+}
+
+.exit-door-icon {
+  width: 22px;
+  height: 22px;
+  stroke: var(--text-secondary, #999);
+  transition: stroke 0.2s, transform 0.2s;
+  transform-origin: left center;
+}
+
+.exit-room-btn:hover .exit-door-icon {
+  stroke: #dc3545;
+  animation: door-open 0.35s ease forwards;
+}
+
+@keyframes door-open {
+  0% {
+    transform: rotateY(0deg);
+  }
+
+  50% {
+    transform: rotateY(-25deg);
+  }
+
+  100% {
+    transform: rotateY(-20deg);
+  }
 }
