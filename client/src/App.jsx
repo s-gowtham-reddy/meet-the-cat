@@ -71,6 +71,16 @@ function App() {
   const typingTimeoutRef = useRef(null);
   const messagesEndRef = useRef(null);
   const messageSoundRef = useRef(null);
+  if (!messageSoundRef.current) {
+    messageSoundRef.current = new Audio('https://assets.mixkit.co/active_storage/sfx/2560-message-pop-alert.mp3');
+  }
+
+  const dragRef = useRef({ startX: 0, msg: null, lastOffset: 0 });
+  const swipeCleanupRef = useRef(null);
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
 
   useEffect(() => {
     scrollToBottom();
