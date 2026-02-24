@@ -1753,6 +1753,7 @@ body {
   margin-bottom: 12px;
   background: linear-gradient(to right, #e85d75, #ff8e8e);
   -webkit-background-clip: text;
+  background-clip: text;
   -webkit-text-fill-color: transparent;
 }
 
