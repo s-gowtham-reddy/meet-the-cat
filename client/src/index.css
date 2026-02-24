@@ -2030,3 +2030,90 @@ body {
     transform: rotateY(-20deg);
   }
 }
+
+/* ===== Partner 3-Dot Options Menu ===== */
+.partner-options-wrap {
+  position: relative;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.partner-options-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 1.3rem;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--text-secondary, #888);
+  padding: 4px 8px;
+  border-radius: 50%;
+  transition: background 0.2s, color 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  letter-spacing: 0;
+}
+
+.partner-options-btn:hover {
+  background: var(--glass-bg);
+  color: var(--primary-color);
+}
+
+.partner-options-dropdown {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  min-width: 180px;
+  background: var(--card-bg, #fff);
+  border: 1px solid var(--glass-border);
+  border-radius: 14px;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.13);
+  z-index: 100;
+  overflow: hidden;
+  animation: slideUpFade 0.18s ease;
+}
+
+.partner-options-dropdown button {
+  width: 100%;
+  background: none;
+  border: none;
+  text-align: left;
+  padding: 11px 16px;
+  font-size: 0.88rem;
+  cursor: pointer;
+  color: var(--text-main);
+  transition: background 0.15s;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.partner-options-dropdown button:hover {
+  background: var(--bg-color, #f5f5f5);
+}
+
+.partner-options-dropdown .options-report {
+  color: #e67e22;
+}
+
+.partner-options-dropdown .options-report:hover {
+  background: rgba(230, 126, 34, 0.08);
+}
+
+.partner-options-dropdown .options-leave {
+  color: #dc3545;
+}
+
+.partner-options-dropdown .options-leave:hover {
+  background: rgba(220, 53, 69, 0.08);
+}
+
+/* Ensure partner-info is flex for alignment */
+.partner-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+
+}
