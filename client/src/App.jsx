@@ -52,6 +52,7 @@ function App() {
   const [messageSoundOn, setMessageSoundOn] = useState(true);
   const [showStickerPicker, setShowStickerPicker] = useState(false);
   const [showOptionsMenu, setShowOptionsMenu] = useState(false);
+  const [showProfileCard, setShowProfileCard] = useState(false);
 
   // Chat State
   const [message, setMessage] = useState('');
@@ -815,7 +816,7 @@ function App() {
                             )}
                           </div>
                         ) : (
-                          <div className="partner-info">
+                          <div className="partner-info" onClick={() => setShowProfileCard(true)} title="View partner profile">
                             <img src={getCatUrl(partner?.avatarSeed)} className="partner-mini-avatar" alt="" />
                             <p>
                               {roomId ? (
@@ -1057,6 +1058,62 @@ function App() {
             </>
           )}
         </main>
+
+        {showProfileCard && partner && (
+          <div className="modal-overlay profile-modal-overlay" onClick={() => setShowProfileCard(false)}>
+            <div className="modal-content profile-card-modal glass-card" onClick={(e) => e.stopPropagation()}>
+              <button className="modal-close-btn" onClick={() => setShowProfileCard(false)}>✕</button>
+
+              <div className="profile-cat-hero">
+                <img src={getCatUrl(partner.avatarSeed)} alt={partner.name} className="profile-hero-img" />
+                <div className="paw-ring-overlay">🐾</div>
+                <div className="online-dot-big"></div>
+              </div>
+
+              <div className="profile-info-main">
+                <h2 className="profile-name-big">{partner.name} <span className="verified-check">✓</span></h2>
+                <p className="profile-bio-italic">"Just a curious cat looking for a purr-fect conversation."</p>
+
+                <div className="profile-stats-row">
+                  <div className="stat-item">
+                    <span className="stat-value">1.2k</span>
+                    <span className="stat-label">Messages</span>
+                  </div>
+                  <div className="stat-divider"></div>
+                  <div className="stat-item">
+                    <span className="stat-value">84</span>
+                    <span className="stat-label">Matches</span>
+                  </div>
+                  <div className="stat-divider"></div>
+                  <div className="stat-item">
+                    <span className="stat-value">4.9</span>
+                    <span className="stat-label">Rating</span>
+                  </div>
+                </div>
+
+                <div className="profile-tags-cloud">
+                  <span className="profile-tag-pill">#Friendly</span>
+                  <span className="profile-tag-pill">#Playful</span>
+                  <span className="profile-tag-pill">#GentleHeart</span>
+                </div>
+
+                <div className="profile-actions-grid">
+                  <button className="profile-cta-btn primary-btn" onClick={() => { handleMeow(); setShowProfileCard(false); }}>
+                    Meow Back 🐾
+                  </button>
+                  <div className="secondary-actions-row">
+                    <button className="profile-ghost-btn" onClick={() => alert('Future feature: View Secret Identity 🕵️')}>
+                      View Secret Identity
+                    </button>
+                    <button className="profile-ghost-btn danger-text" onClick={() => { alert('Report feature coming soon 🐾'); setShowProfileCard(false); }}>
+                      Report
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )
